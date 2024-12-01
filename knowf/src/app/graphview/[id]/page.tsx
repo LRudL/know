@@ -22,45 +22,34 @@ import {
   KnowledgeGraphService,
 } from "@/lib/graphService";
 
-const CustomNode = React.memo(({ data }: { data: any }) => {
-  return (
-    <div className="bg-white p-4 rounded-lg shadow border">
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id={`${data.id}-source`}
-        style={{ bottom: -5, opacity: 0 }}
-      />
-      <Handle
-        type="target"
-        position={Position.Top}
-        id={`${data.id}-target`}
-        style={{ top: -5, opacity: 0 }}
-      />
-      <p className="font-bold mb-2">{data.summary}</p>
-      <div className="space-y-2">
-        <div>
-          <span className="text-sm text-gray-600">Index: </span>
-          <span className="text-sm">{data.order_index}</span>
-        </div>
-        <div>
-          <span className="text-sm text-gray-600">Content: </span>
-          <span className="text-sm">{data.content}</span>
-        </div>
-        <div>
-          <span className="text-sm text-gray-600">Supporting Quotes: </span>
-          <div className="text-sm pl-2">
-            {data.supporting_quotes.map((quote: string, i: number) => (
-              <p key={i} className="italic">
-                "{quote}"
-              </p>
-            ))}
-          </div>
-        </div>
+const CustomNode = React.memo(
+  ({ data, selected }: { data: any; selected: boolean }) => {
+    return (
+      <div
+        className={`bg-white p-1 rounded shadow border text-sm ${
+          selected ? "ring-2 ring-blue-500" : ""
+        }`}
+      >
+        <Handle
+          type="target"
+          position={Position.Top}
+          id={`${data.id}-target`}
+          style={{ top: -5, opacity: 0 }}
+        />
+        <p className="font-medium text-xs">
+          {data.summary}{" "}
+          <span className="text-gray-500">({data.order_index})</span>
+        </p>
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id={`${data.id}-source`}
+          style={{ bottom: -5, opacity: 0 }}
+        />
       </div>
-    </div>
-  );
-});
+    );
+  }
+);
 
 const nodeTypes = {
   custom: CustomNode,
@@ -106,11 +95,15 @@ const getLayoutedElements = (
 
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: direction });
+  dagreGraph.setGraph({
+    rankdir: direction,
+    nodesep: 30, // Reduce horizontal spacing between nodes
+    ranksep: 30, // Reduce vertical spacing between ranks
+  });
 
-  // Set nodes
+  // Set nodes with smaller dimensions
   nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: 250, height: 100 });
+    dagreGraph.setNode(node.id, { width: 150, height: 30 });
   });
 
   // Set edges
@@ -127,8 +120,8 @@ const getLayoutedElements = (
     return {
       ...node,
       position: {
-        x: nodeWithPosition.x - 125, // center node
-        y: nodeWithPosition.y - 50,
+        x: nodeWithPosition.x - 75, // Half of new width
+        y: nodeWithPosition.y - 15, // Half of new height
       },
     };
   });
@@ -160,6 +153,8 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
   // END UNDELETABLE COMMENTS
   const graphId = unwrappedParams.id;
   const { data: graph, isLoading } = useGraph(graphId);
+  const [selectedNode, setSelectedNode] =
+    React.useState<KnowledgeGraphNode | null>(null);
 
   if (!graphId) {
     return <div>Invalid graph ID</div>;
@@ -175,13 +170,18 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
 
   const elements = getLayoutedElements(graph.nodes, graph.edges);
 
+  const onNodeClick = (_: any, node: Node) => {
+    setSelectedNode(node.data);
+  };
+
   return (
-    <div style={{ width: "100vw", height: "100vh" }}>
+    <div style={{ width: "100vw", height: "100vh" }} className="relative">
       <ReactFlow
         nodes={elements.nodes}
         edges={elements.edges}
         nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
+        onNodeClick={onNodeClick}
         defaultEdgeOptions={{
           type: "default",
           animated: false,
@@ -210,6 +210,48 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
         </Panel>
       </ReactFlow>
+
+      {/* Info Panel */}
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+        <div className="max-h-[300px] overflow-y-auto p-4">
+          <div className="max-w-4xl mx-auto">
+            {selectedNode ? (
+              <div className="space-y-3">
+                <div>
+                  <span className="font-bold text-lg">Summary: </span>
+                  <span className="text-lg">{selectedNode.summary}</span>
+                </div>
+                <div>
+                  <span className="font-bold">Order Index: </span>
+                  <span>{selectedNode.order_index}</span>
+                </div>
+                <div>
+                  <span className="font-bold">Content: </span>
+                  <div className="mt-2 whitespace-pre-wrap bg-gray-50 p-2 rounded">
+                    {selectedNode.content}
+                  </div>
+                </div>
+                <div>
+                  <span className="font-bold">Supporting Quotes: </span>
+                  <div className="pl-4 space-y-2">
+                    {selectedNode.supporting_quotes.map(
+                      (quote: string, i: number) => (
+                        <p key={i} className="italic bg-gray-50 p-2 rounded">
+                          "{quote}"
+                        </p>
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 text-lg">
+                Click on a node to view its details
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
