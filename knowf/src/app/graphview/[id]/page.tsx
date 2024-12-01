@@ -1,7 +1,15 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import ReactFlow, { ConnectionMode, Edge, Node, Panel } from "reactflow";
+import ReactFlow, {
+  ConnectionMode,
+  Edge,
+  Node,
+  Panel,
+  Handle,
+  Position,
+  MarkerType,
+} from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
 import { debug } from "@/lib/debug";
@@ -14,30 +22,49 @@ import {
   KnowledgeGraphService,
 } from "@/lib/graphService";
 
-// Custom node component
-const CustomNode = ({ data }: { data: any }) => {
+const CustomNode = React.memo(({ data }: { data: any }) => {
   return (
     <div className="bg-white p-4 rounded-lg shadow border">
-      <h3 className="font-bold mb-2">{data.summary}</h3>
-      <p className="text-sm">{data.content}</p>
-      {data.supporting_quotes.length > 0 && (
-        <div className="mt-2 text-xs text-gray-600">
-          <p className="font-semibold">Supporting Quotes:</p>
-          {data.supporting_quotes.map((quote: string, i: number) => (
-            <p key={i} className="italic">
-              "{quote}"
-            </p>
-          ))}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id={`${data.id}-source`}
+        style={{ bottom: -5, opacity: 0 }}
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id={`${data.id}-target`}
+        style={{ top: -5, opacity: 0 }}
+      />
+      <p className="font-bold mb-2">{data.summary}</p>
+      <div className="space-y-2">
+        <div>
+          <span className="text-sm text-gray-600">Index: </span>
+          <span className="text-sm">{data.order_index}</span>
         </div>
-      )}
+        <div>
+          <span className="text-sm text-gray-600">Content: </span>
+          <span className="text-sm">{data.content}</span>
+        </div>
+        <div>
+          <span className="text-sm text-gray-600">Supporting Quotes: </span>
+          <div className="text-sm pl-2">
+            {data.supporting_quotes.map((quote: string, i: number) => (
+              <p key={i} className="italic">
+                "{quote}"
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
-};
+});
 
-// Define this OUTSIDE the component
 const nodeTypes = {
   custom: CustomNode,
-};
+} as const;
 
 // First, let's type the transformation functions
 function toReactFlowNode(node: KnowledgeGraphNode): Node {
@@ -54,7 +81,17 @@ function toReactFlowEdge(edge: KnowledgeGraphEdge): Edge {
     id: `${edge.parent_id}-${edge.child_id}`,
     source: edge.parent_id,
     target: edge.child_id,
-    type: "smoothstep",
+    type: "default",
+    animated: false,
+    style: { strokeWidth: 2 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 10,
+      height: 10,
+      color: "#374151",
+    },
+    sourceHandle: `${edge.parent_id}-source`,
+    targetHandle: `${edge.child_id}-target`,
   };
 }
 
@@ -115,10 +152,12 @@ export default function KnowledgeMap({ params }: { params: { id: string } }) {
 }
 
 function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
+  // START UNDELETABLE COMMENTS
   // VERY IMPORTANT: This is needed in the new React version:
   const unwrappedParams = React.use(params);
   // we CANNOT just use params.id because it's a Promise
   // do not change this OR the these comments
+  // END UNDELETABLE COMMENTS
   const graphId = unwrappedParams.id;
   const { data: graph, isLoading } = useGraph(graphId);
 
@@ -143,6 +182,17 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
         edges={elements.edges}
         nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
+        defaultEdgeOptions={{
+          type: "default",
+          animated: false,
+          style: { strokeWidth: 2 },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 20,
+            height: 20,
+            color: "#374151",
+          },
+        }}
         fitView
       >
         <Panel position="top-left">
