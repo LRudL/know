@@ -4,12 +4,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { debug } from "@/lib/debug";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const [documents, setDocuments] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [generatedMaps, setGeneratedMaps] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (!loading && !user) {
@@ -28,7 +30,6 @@ export default function Dashboard() {
     if (error) {
       debug.error("Error fetching documents:", error);
     } else {
-      console.log("Documents:", documents);
       setDocuments(documents);
     }
   };
@@ -109,23 +110,56 @@ export default function Dashboard() {
 
   const generateKnowledgeMap = async (documentId: string) => {
     try {
-      const response = await fetch(`/api/generate_knowledge_map`, {
+      debug.log("Generating knowledge map for document:", documentId);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("No auth session");
+      }
+
+      debug.log(
+        "Making request with token:",
+        session.access_token.substring(0, 20) + "..."
+      );
+
+      const response = await fetch(`/api/content_map/${documentId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ documentId }),
+      });
+
+      debug.log("Response received:", {
+        status: response.status,
+        statusText: response.statusText,
       });
 
       if (!response.ok) {
-        throw new Error("Failed to generate knowledge map");
+        const errorText = await response.text();
+        debug.error("API Error:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText,
+        });
+        throw new Error(`API Error ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
       debug.log("Knowledge map generated successfully:", data);
-      // Optionally, you can update the UI or state based on the response
+
+      setGeneratedMaps((prev) => ({
+        ...prev,
+        [documentId]: data,
+      }));
     } catch (error) {
-      debug.error("Error generating knowledge map:", error);
+      debug.error("Error generating knowledge map:", {
+        error: error instanceof Error ? error.message : String(error),
+        documentId,
+      });
+      throw error;
     }
   };
 
@@ -195,6 +229,14 @@ export default function Dashboard() {
                   >
                     Generate Knowledge Map
                   </button>
+                  {generatedMaps[doc.id] && (
+                    <Link
+                      href={`/dashboard/knowledge-map/${doc.id}`}
+                      className="mr-2 bg-green-500 text-white rounded px-4 py-2"
+                    >
+                      View Map
+                    </Link>
+                  )}
                   <button
                     onClick={() =>
                       handleDeleteDocument(doc.id, doc.storage_path)

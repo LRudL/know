@@ -323,13 +323,6 @@ Demo goal:
 - there is tracking of the user's progress through the idea DAG for the document, which consists, for each idea, of: the quantitative state of the spaced repetition setup for that idea, and any qualitative notes from the user or the AI
 - the user can have chats with the AI, where the AI prompts the user to invent the information contained in the ideas in a Socratic method kind of way. Then the AI also tracks the user's progress through the ideas
 
-What currently works:
-- a Supabase project has been setup
-- there are .env.local and .env files for Supabase keys in the frontend and backend respectively
-- the backend can be run with uvicorn to give a local host page with a /docs endpoint that shows the OpenAPI schema
-- the frontend runs with npm run dev and can be viewed in the browser at localhost:3000, showing the next.js welcome page
-
-
 The plan:
 
 Phase 1: Authentication & Basic Infrastructure (DONE)
@@ -354,11 +347,10 @@ Database schema ready
 
 Phase 2: Document Management
 
-Create document upload UI
-Set up Supabase storage bucket configuration
+Create document upload UI-DONE
+Set up Supabase storage bucket configuration-DONE
 Implement backend endpoint for document processing
-Add document list view
-Basic document detail view
+Add document list view-DONE
 
 Milestones:
 Users can upload and view documents
