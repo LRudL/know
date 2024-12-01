@@ -45,18 +45,18 @@ CREATE TABLE documents (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Knowledge graph with ordered nodes
 CREATE TABLE knowledge_graphs (
     id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-    document_id uuid REFERENCES documents NOT NULL,
+    document_id uuid REFERENCES documents(id) ON DELETE CASCADE NOT NULL,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+
 CREATE TABLE graph_nodes (
     id text PRIMARY KEY CHECK (id ~ '^node_[a-zA-Z0-9]+$'),
-    graph_id uuid REFERENCES knowledge_graphs NOT NULL,
+    graph_id uuid REFERENCES knowledge_graphs(id) ON DELETE CASCADE NOT NULL,
     content text NOT NULL,
-    supporting_quotes text,
+    supporting_quotes text[],
     summary text,
     order_index integer NOT NULL,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -65,6 +65,7 @@ CREATE TABLE graph_nodes (
 CREATE TABLE graph_edges (
     parent_id text REFERENCES graph_nodes(id) ON DELETE CASCADE,
     child_id text REFERENCES graph_nodes(id) ON DELETE CASCADE,
+    graph_id uuid REFERENCES knowledge_graphs(id) ON DELETE CASCADE NOT NULL,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     PRIMARY KEY (parent_id, child_id)
 );
@@ -224,6 +225,8 @@ CREATE INDEX idx_graph_nodes_graph_id ON graph_nodes(graph_id);
 CREATE INDEX idx_graph_nodes_order ON graph_nodes(graph_id, order_index);
 CREATE INDEX idx_graph_edges_parent ON graph_edges(parent_id);
 CREATE INDEX idx_graph_edges_child ON graph_edges(child_id);
+CREATE INDEX idx_graph_edges_graph_id ON graph_edges(graph_id);
+
 ```
 
 Folder structure (Frontend):

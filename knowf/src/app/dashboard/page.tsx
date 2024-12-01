@@ -5,13 +5,117 @@ import { useEffect, useState } from "react";
 import { debug } from "@/lib/debug";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import { useDocumentGraph } from "@/hooks/useKnowledgeGraph";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
-export default function Dashboard() {
+// Create a client
+const queryClient = new QueryClient();
+
+function DocumentActions({ doc }: { doc: any }) {
+  const queryClient = useQueryClient();
+  const {
+    graph,
+    isLoading,
+    generateGraph,
+    isGenerating,
+    deleteGraph,
+    isDeleting,
+    exists,
+  } = useDocumentGraph(doc.id);
+
+  const { mutate: deleteDocument, isPending: isDeletingDocument } = useMutation(
+    {
+      mutationFn: async () => {
+        // Delete from documents table
+        const { error: deleteError } = await supabase
+          .from("documents")
+          .delete()
+          .eq("id", doc.id);
+
+        if (deleteError) throw deleteError;
+
+        // Delete from storage
+        const { error: storageError } = await supabase.storage
+          .from("documents")
+          .remove([doc.storage_path]);
+
+        if (storageError) {
+          debug.error("Error deleting document from storage:", storageError);
+        }
+      },
+      onSuccess: () => {
+        // Invalidate the documents query to refresh the list
+        queryClient.invalidateQueries({ queryKey: ["documents"] });
+      },
+      onError: (error) => {
+        debug.error("Error deleting document:", error);
+      },
+    }
+  );
+
+  return (
+    <td className="border border-gray-300 p-2">
+      <div className="flex gap-2">
+        {!exists ? (
+          <button
+            onClick={() => generateGraph()}
+            disabled={isGenerating}
+            className="bg-blue-500 text-white rounded px-4 py-2 disabled:bg-blue-300"
+          >
+            {isGenerating ? "Generating..." : "Generate Knowledge Map"}
+          </button>
+        ) : (
+          <>
+            <Link
+              href={`/graphview/${graph?.id}`}
+              className="bg-green-500 text-white rounded px-4 py-2"
+            >
+              View Map
+            </Link>
+            <button
+              onClick={() => {
+                debug.log("Delete button clicked");
+                deleteGraph();
+              }}
+              disabled={isDeleting}
+              className="bg-red-500 text-white rounded px-4 py-2 disabled:bg-red-300"
+            >
+              {isDeleting ? "Deleting..." : "Delete Map"}
+            </button>
+          </>
+        )}
+        <button
+          onClick={() => deleteDocument()}
+          disabled={isDeletingDocument}
+          className="bg-red-700 text-white rounded px-4 py-2"
+        >
+          Delete Document
+        </button>
+      </div>
+    </td>
+  );
+}
+
+// Wrap the dashboard content
+export default function DashboardWrapper() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Dashboard />
+    </QueryClientProvider>
+  );
+}
+
+function Dashboard() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const [documents, setDocuments] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [generatedMaps, setGeneratedMaps] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (!loading && !user) {
@@ -38,38 +142,47 @@ export default function Dashboard() {
     const file = event.target.files[0];
     if (!file) return;
 
-    const filePath = `${user?.id}/${file.name}`;
+    // Add timestamp to filename to ensure uniqueness
+    const timestamp = new Date().getTime();
+    const fileName = `${timestamp}_${file.name}`;
+    const filePath = `${user?.id}/${fileName}`;
     setUploading(true);
 
-    const { data, error: uploadError } = await supabase.storage
-      .from("documents")
-      .upload(filePath, file);
+    try {
+      const { data, error: uploadError } = await supabase.storage
+        .from("documents")
+        .upload(filePath, file);
 
-    if (uploadError) {
-      debug.error("Error uploading file:", uploadError);
+      if (uploadError) {
+        debug.error("Error uploading file:", uploadError);
+        setUploading(false);
+        return;
+      }
+
+      debug.log("File uploaded successfully:", data);
+
+      const { error: insertError } = await supabase.from("documents").insert([
+        {
+          user_id: user?.id,
+          title: file.name, // Keep original filename as title
+          file_size: file.size,
+          storage_path: filePath,
+        },
+      ]);
+
+      if (insertError) {
+        debug.error("Error inserting document metadata:", insertError);
+        // Cleanup the uploaded file if metadata insertion fails
+        await supabase.storage.from("documents").remove([filePath]);
+      } else {
+        debug.log("Document metadata inserted successfully");
+        fetchDocuments();
+      }
+    } catch (error) {
+      debug.error("Upload process failed:", error);
+    } finally {
       setUploading(false);
-      return;
     }
-
-    debug.log("File uploaded successfully:", data);
-
-    const { error: insertError } = await supabase.from("documents").insert([
-      {
-        user_id: user?.id,
-        title: file.name,
-        file_size: file.size,
-        storage_path: filePath,
-      },
-    ]);
-
-    if (insertError) {
-      debug.error("Error inserting document metadata:", insertError);
-    } else {
-      debug.log("Document metadata inserted successfully");
-      fetchDocuments();
-    }
-
-    setUploading(false);
   };
 
   const handleSignOut = async () => {
@@ -79,111 +192,6 @@ export default function Dashboard() {
       debug.log("User signed out successfully");
     } catch (error) {
       debug.error("Error signing out:", error);
-    }
-  };
-
-  const handleDeleteDocument = async (
-    documentId: string,
-    storagePath: string
-  ) => {
-    const { error: deleteError } = await supabase
-      .from("documents")
-      .delete()
-      .eq("id", documentId);
-
-    if (deleteError) {
-      debug.error("Error deleting document metadata:", deleteError);
-      return;
-    }
-
-    const { error: storageError } = await supabase.storage
-      .from("documents")
-      .remove([storagePath]);
-
-    if (storageError) {
-      debug.error("Error deleting document from storage:", storageError);
-    } else {
-      debug.log("Document deleted successfully");
-      fetchDocuments();
-    }
-  };
-
-  const generateKnowledgeMap = async (documentId: string) => {
-    try {
-      debug.log("Generating knowledge map for document:", documentId);
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error("No auth session");
-      }
-
-      debug.log(
-        "Making request with token:",
-        session.access_token.substring(0, 20) + "..."
-      );
-
-      const response = await fetch(`/api/content_map/${documentId}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      debug.log("Response received:", {
-        status: response.status,
-        statusText: response.statusText,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        debug.error("API Error:", {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText,
-        });
-        throw new Error(`API Error ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      debug.log("Knowledge map generated successfully:", data);
-
-      setGeneratedMaps((prev) => ({
-        ...prev,
-        [documentId]: data,
-      }));
-    } catch (error) {
-      debug.error("Error generating knowledge map:", {
-        error: error instanceof Error ? error.message : String(error),
-        documentId,
-      });
-      throw error;
-    }
-  };
-
-  const getDocumentContent = async (documentId: string) => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-
-      const response = await fetch(
-        `/api/documents/document_content?document_id=${documentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to fetch document content");
-      const content = await response.blob();
-      return content;
-    } catch (error) {
-      debug.error("Error fetching document content:", error);
     }
   };
 
@@ -222,30 +230,7 @@ export default function Dashboard() {
             {documents.map((doc) => (
               <tr key={doc.id}>
                 <td className="border border-gray-300 p-2">{doc.title}</td>
-                <td className="border border-gray-300 p-2">
-                  <button
-                    onClick={() => generateKnowledgeMap(doc.id)}
-                    className="mr-2 bg-blue-500 text-white rounded px-4 py-2"
-                  >
-                    Generate Knowledge Map
-                  </button>
-                  {generatedMaps[doc.id] && (
-                    <Link
-                      href={`/dashboard/knowledge-map/${doc.id}`}
-                      className="mr-2 bg-green-500 text-white rounded px-4 py-2"
-                    >
-                      View Map
-                    </Link>
-                  )}
-                  <button
-                    onClick={() =>
-                      handleDeleteDocument(doc.id, doc.storage_path)
-                    }
-                    className="bg-red-500 text-white rounded px-4 py-2"
-                  >
-                    Delete
-                  </button>
-                </td>
+                <DocumentActions doc={doc} />
               </tr>
             ))}
           </tbody>
