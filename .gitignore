@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.env
+.venv
+pythonenv*
+
+# npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Supabase
+**/supabase/.temp
+**/supabase/.env.local
+.env*.local
+.env.development
+.env.test
+.env.production
+
+# IDE/Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+*.sublime-workspace
+*.sublime-project
+
+# Testing
+/coverage
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Debug
+.log
+logs
+*.log
+
+# Misc
+.DS_Store*
+Thumbs.db
+
+

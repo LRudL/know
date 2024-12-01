@@ -1,0 +1,427 @@
+Project Overview:
+A multi-platform application that allows users to upload documents, interact with AI (including document processing and chat functionality), and manage user-specific data including AI-generated graphs.
+
+Goal:
+This is going to evolve into an AI-powered "turbo Anki". Instead of normal Anki:
+- you don't have to make cards, because the AI automatically extracts the relevant concepts from documents you upload
+- you don't have to review cards, but instead just have a conversation with the AI where it prompts you to recall the information in a natural way
+
+
+Tech Stack:
+
+Frontend: Next.js with TypeScript (with future mobile support via React Native/Expo)
+Database/Auth: Supabase (handling authentication, data storage, and file storage)
+Backend: Python FastAPI (handling AI processing and business logic)
+
+
+Database structure:
+
+The schema is designed for an AI-powered learning system where users upload documents that get converted into knowledge graphs of concepts, then engage with an AI to learn those concepts through conversation. The key tables are:
+
+Documents: Stores uploaded documents with basic metadata (user ownership, size, storage path). Documents are treated as immutable - no versioning or updates needed initially.
+Knowledge Graphs: Contains concept nodes extracted from documents. Each node in the JSONB structure includes content, supporting quotes, summary, and references to child nodes. Nodes also have an order_index to preserve their original document ordering. The JSONB format was chosen to allow flexibility for future features like embedding images or PDF sections.
+Learning Progress: Tracks a user's learning state for each concept node. Includes spaced repetition data (ease factor, intervals, review quality etc). Uses versioning to enable point-in-time recovery and progress visualization. Each node can only have one learning progress entry (enforced by UNIQUE constraint).
+Chat Sessions & Messages: Records conversations between users and the AI. Messages are timestamped and marked as either user or AI-generated.
+Learning Progress Updates: Logs whenever the AI decides to update a user's learning state during chat. Each update references the specific chat message that triggered it, the learning progress record being updated, and includes data about the review quality and optional notes. This creates an audit trail and enables rollback/replay of learning states.
+
+Key design decisions:
+
+Used JSONB for knowledge graph nodes to allow flexibility in content types
+Added versioning to learning progress for debugging and timeline features
+Kept document/graph structures immutable to simplify logic
+Used foreign key constraints and RLS policies to ensure data integrity and security
+Added appropriate indexes for common query patterns
+Included created_at timestamps throughout for debugging and auditing
+
+
+```sql
+-- Documents table - core document metadata
+CREATE TABLE documents (
+    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id uuid REFERENCES auth.users NOT NULL,
+    title text NOT NULL,
+    file_size bigint NOT NULL,
+    storage_path text NOT NULL,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Knowledge graph with ordered nodes
+CREATE TABLE knowledge_graphs (
+    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+    document_id uuid REFERENCES documents NOT NULL,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE graph_nodes (
+    id text PRIMARY KEY CHECK (id ~ '^node_[a-zA-Z0-9]+$'),
+    graph_id uuid REFERENCES knowledge_graphs NOT NULL,
+    content text NOT NULL,
+    supporting_quotes text,
+    summary text,
+    order_index integer NOT NULL,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE graph_edges (
+    parent_id text REFERENCES graph_nodes(id) ON DELETE CASCADE,
+    child_id text REFERENCES graph_nodes(id) ON DELETE CASCADE,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    PRIMARY KEY (parent_id, child_id)
+);
+
+-- Learning progress with versioning
+CREATE TABLE learning_progress (
+    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id uuid REFERENCES auth.users NOT NULL,
+    node_id text NOT NULL CHECK (node_id ~ '^node_[a-zA-Z0-9]+$'),
+    graph_id uuid REFERENCES knowledge_graphs NOT NULL,
+    version integer NOT NULL DEFAULT 1,
+    spaced_rep_state jsonb NOT NULL DEFAULT '{
+        "next_review": null,
+        "ease_factor": 2.5,
+        "current_interval": 0,
+        "review_streak": 0,
+        "last_review": null,
+        "last_quality": null
+    }',
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(graph_id, node_id)
+);
+
+-- Chat session tracking
+CREATE TABLE chat_sessions (
+    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id uuid REFERENCES auth.users NOT NULL,
+    document_id uuid REFERENCES documents NOT NULL,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Individual chat messages
+CREATE TABLE chat_messages (
+    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+    session_id uuid REFERENCES chat_sessions NOT NULL,
+    is_ai boolean NOT NULL,
+    content text NOT NULL,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Learning progress update log
+CREATE TABLE learning_progress_updates (
+    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+    message_id uuid REFERENCES chat_messages NOT NULL,
+    learning_progress_id uuid REFERENCES learning_progress NOT NULL,
+    learning_progress_version integer NOT NULL,
+    update_data jsonb NOT NULL, -- {concept_id, quality_rating, note}
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable RLS on all tables
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE knowledge_graphs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE graph_nodes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE graph_edges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE learning_progress ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE learning_progress_updates ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+CREATE POLICY "Users can view their own documents"
+    ON documents FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own documents"
+    ON documents FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own documents"
+    ON documents FOR UPDATE
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own documents"
+    ON documents FOR DELETE
+    USING (auth.uid() = user_id);
+
+-- Knowledge graphs policies (document ownership based)
+CREATE POLICY "Users can view graphs of their documents"
+    ON knowledge_graphs FOR SELECT
+    USING (EXISTS (
+        SELECT 1 FROM documents
+        WHERE documents.id = knowledge_graphs.document_id
+        AND documents.user_id = auth.uid()
+    ));
+
+CREATE POLICY "Users can insert graphs for their documents"
+    ON knowledge_graphs FOR INSERT
+    WITH CHECK (EXISTS (
+        SELECT 1 FROM documents
+        WHERE documents.id = knowledge_graphs.document_id
+        AND documents.user_id = auth.uid()
+    ));
+
+CREATE POLICY "Users can view nodes of their graphs"
+    ON graph_nodes FOR SELECT
+    USING (EXISTS (
+        SELECT 1 FROM knowledge_graphs
+        JOIN documents ON documents.id = knowledge_graphs.document_id
+        WHERE knowledge_graphs.id = graph_nodes.graph_id
+        AND documents.user_id = auth.uid()
+    ));
+
+CREATE POLICY "Users can view edges of their graphs"
+    ON graph_edges FOR SELECT
+    USING (EXISTS (
+        SELECT 1 FROM graph_nodes
+        JOIN knowledge_graphs ON knowledge_graphs.id = graph_nodes.graph_id
+        JOIN documents ON documents.id = knowledge_graphs.document_id
+        WHERE graph_nodes.id = graph_edges.parent_id
+        AND documents.user_id = auth.uid()
+    ));
+
+-- Learning progress policies
+CREATE POLICY "Users can view their learning progress"
+    ON learning_progress FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can modify their learning progress"
+    ON learning_progress FOR ALL
+    USING (auth.uid() = user_id);
+
+-- Chat session policies
+CREATE POLICY "Users can view their chat sessions"
+    ON chat_sessions FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create chat sessions"
+    ON chat_sessions FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+-- Chat messages policies (session ownership based)
+CREATE POLICY "Users can view messages from their sessions"
+    ON chat_messages FOR SELECT
+    USING (EXISTS (
+        SELECT 1 FROM chat_sessions
+        WHERE chat_sessions.id = chat_messages.session_id
+        AND chat_sessions.user_id = auth.uid()
+    ));
+
+-- Learning progress updates policies
+CREATE POLICY "Users can view their progress updates"
+    ON learning_progress_updates FOR SELECT
+    USING (EXISTS (
+        SELECT 1 FROM learning_progress
+        WHERE learning_progress.id = learning_progress_updates.learning_progress_id
+        AND learning_progress.user_id = auth.uid()
+    ));
+
+-- Indexes for common queries
+CREATE INDEX idx_documents_user_id ON documents(user_id);
+CREATE INDEX idx_learning_progress_user_node ON learning_progress(user_id, node_id);
+CREATE INDEX idx_chat_sessions_user ON chat_sessions(user_id);
+CREATE INDEX idx_chat_messages_session ON chat_messages(session_id);
+CREATE INDEX idx_learning_progress_updates_progress ON learning_progress_updates(learning_progress_id);
+CREATE INDEX idx_graph_nodes_graph_id ON graph_nodes(graph_id);
+CREATE INDEX idx_graph_nodes_order ON graph_nodes(graph_id, order_index);
+CREATE INDEX idx_graph_edges_parent ON graph_edges(parent_id);
+CREATE INDEX idx_graph_edges_child ON graph_edges(child_id);
+```
+
+Folder structure (Frontend):
+know/
+├── src/
+│   ├── app/                    # Next.js 13+ app directory
+│   │   ├── (auth)/            # Auth-related routes grouped
+│   │   │   ├── login/
+│   │   │   │   └── page.tsx
+│   │   │   ├── signup/
+│   │   │   │   └── page.tsx
+│   │   ├── dashboard/         # Protected routes
+│   │   │   └── page.tsx
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── components/            # Reusable components
+│   │   ├── ui/               # Basic UI components
+│   │   │   ├── button.tsx
+│   │   │   ├── input.tsx
+│   │   │   └── ...
+│   │   └── auth/             # Auth-specific components
+│   │       ├── auth-form.tsx
+│   │       └── ...
+│   ├── lib/                  # Utility libraries
+│   │   └── supabase.ts      # Supabase client
+│   │   └── debug.ts         # Debug utility (use debug.error, debug.warn, debug.log)
+│   ├── hooks/               # Custom React hooks
+│   │   └── use-auth.ts
+│   ├── contexts/            # React contexts
+│   │   └── auth-context.tsx
+│   ├── types/              # TypeScript type definitions
+│   │   └── index.ts
+│   └── utils/              # Helper functions
+│       └── auth.ts
+├── public/                 # Static files
+├── .env.local             # Environment variables
+|-- middleware.ts           # API forwarding (of ALL routes) and auth protection
+└── ...                    # Other config files
+
+
+The debug utility code is:
+
+```ts
+const DEBUG = process.env.NODE_ENV === 'development'
+
+export const debug = {
+  log: (...args: any[]) => {
+    if (DEBUG) console.log('[DEBUG]', ...args)
+  },
+  error: (...args: any[]) => {
+    if (DEBUG) console.error('[ERROR]', ...args)
+  },
+  warn: (...args: any[]) => {
+    if (DEBUG) console.warn('[WARN]', ...args)
+  }
+}
+```
+
+
+
+Folder Structure (Backend):
+knowb/
+├── src/                    # Main source code
+│   ├── api/               # API layer
+│   │   └── routes/        # API route definitions
+│   ├── core/              # Core business logic
+│   ├── models/            # Data models/schemas
+│   └── services/          # Service layer (business operations)
+├── main.py                # Application entry point
+├── .env                   # Environment variables
+└── venv/                  # Python virtual environment
+Key Features:
+
+User authentication
+Document upload/management
+AI processing of documents
+Graph generation from documents
+Chat functionality with AI
+Cloud data backup
+
+Development Environment:
+
+Frontend runs on localhost:3000 with hot reload
+Backend runs on localhost:8000 with uvicorn
+Supabase provides cloud database/auth services
+
+The structure follows a clean architecture pattern with separated concerns across api, core, models, and services layers, making it maintainable and scalable.
+
+Development principles:
+- write code with good error logging, using the frontend or backend's debug utility
+
+
+Demo goal:
+- users can sign up, log in, and log out
+- users can upload a document
+- there is an API call that uses Anthropic API to extract a DAG of ideas from the document, where for each idea it stores some supporting quotes from the document and a summary
+- there is tracking of the user's progress through the idea DAG for the document, which consists, for each idea, of: the quantitative state of the spaced repetition setup for that idea, and any qualitative notes from the user or the AI
+- the user can have chats with the AI, where the AI prompts the user to invent the information contained in the ideas in a Socratic method kind of way. Then the AI also tracks the user's progress through the ideas
+
+What currently works:
+- a Supabase project has been setup
+- there are .env.local and .env files for Supabase keys in the frontend and backend respectively
+- the backend can be run with uvicorn to give a local host page with a /docs endpoint that shows the OpenAPI schema
+- the frontend runs with npm run dev and can be viewed in the browser at localhost:3000, showing the next.js welcome page
+
+
+The plan:
+
+Phase 1: Authentication & Basic Infrastructure (DONE)
+
+Set up Supabase Auth in frontend-DONE
+Implement sign up/login/logout flows-DONE
+Add protected routes-DONE
+Set up auth context/hooks-DONE
+
+
+Create basic database schema in Supabase-DONE
+
+Users table (auto-created by Supabase auth)-DONE
+Database schema in Supabase-DONE
+
+Milestones:
+Users can sign up and log in
+Protected routes work
+Database schema ready
+
+
+
+Phase 2: Document Management
+
+Create document upload UI
+Set up Supabase storage bucket configuration
+Implement backend endpoint for document processing
+Add document list view
+Basic document detail view
+
+Milestones:
+Users can upload and view documents
+Storage working correctly
+Basic UI flows complete
+
+
+
+Phase 3: Knowledge Graph Generation
+
+Create API endpoint that:
+
+Takes document content
+Calls Anthropic API to extract ideas
+Structures response into DAG format
+Stores in database
+
+
+Add basic visualization of the knowledge graph
+Implement error handling and processing status updates
+
+Milestones:
+Successful DAG generation from documents
+Data correctly stored in database
+Basic visualization working
+
+
+
+
+
+Phase 4: Progress Tracking
+
+Implement spaced repetition data model
+Add progress tracking UI components
+Create endpoints for updating progress
+Add note-taking functionality
+Implement progress visualization
+
+Milestones:
+Full progress tracking implementation
+Working spaced repetition system
+Progress visualization
+
+
+
+
+Phase 5: AI Chat Integration
+
+Set up chat UI with message history
+Create chat endpoint that:
+
+Maintains context about current learning progress
+Implements Socratic method interaction
+Updates progress based on chat
+
+
+Add prompt engineering for educational interaction
+Implement chat history storage
+
+
+Milestones:
+Working chat with context awareness
+Effective Socratic method implementation
+
+
+
