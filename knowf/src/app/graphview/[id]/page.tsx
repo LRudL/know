@@ -174,6 +174,29 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
     setSelectedNode(node.data);
   };
 
+  const handleRegenerateGraph = async () => {
+    try {
+      // Get the document ID for this graph
+      const documentId = await KnowledgeGraphService.getDocumentIdForGraph(
+        graphId
+      );
+      if (!documentId) {
+        throw new Error("Could not find document ID for this graph");
+      }
+
+      // Delete the current graph
+      await KnowledgeGraphService.deleteGraphById(graphId);
+
+      // Generate new graph and get the new ID
+      const newGraphId = await KnowledgeGraphService.generateGraph(documentId);
+
+      // Redirect to the new graph view
+      window.location.href = `/graphview/${newGraphId}`;
+    } catch (error) {
+      debug.error("Error regenerating graph:", error);
+    }
+  };
+
   return (
     <div style={{ width: "100vw", height: "100vh" }} className="relative">
       <ReactFlow
@@ -205,6 +228,12 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
               >
                 Back to Dashboard
               </Link>
+              <button
+                onClick={handleRegenerateGraph}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition-colors"
+              >
+                Regenerate Map
+              </button>
             </div>
             <p className="text-sm text-gray-600 mt-2">Graph ID: {graphId}</p>
           </div>

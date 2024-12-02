@@ -21,7 +21,7 @@ export interface KnowledgeGraph {
 }
 
 export class KnowledgeGraphService {
-  static async generateGraph(documentId: string): Promise<void> {
+  static async generateGraph(documentId: string): Promise<string> {
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -38,6 +38,9 @@ export class KnowledgeGraphService {
       const error = await response.json();
       throw new Error(error.detail?.message || "Failed to generate graph");
     }
+
+    const data = await response.json();
+    return data.graph_id;
   }
 
   static async getGraphForDocument(
@@ -164,6 +167,22 @@ export class KnowledgeGraphService {
       };
     } catch (error) {
       debug.error("Error fetching graph:", error);
+      return null;
+    }
+  }
+
+  static async getDocumentIdForGraph(graphId: string): Promise<string | null> {
+    try {
+      const { data, error } = await supabase
+        .from("knowledge_graphs")
+        .select("document_id")
+        .eq("id", graphId)
+        .single();
+
+      if (error) throw error;
+      return data?.document_id || null;
+    } catch (error) {
+      debug.error("Error getting document ID for graph:", error);
       return null;
     }
   }
