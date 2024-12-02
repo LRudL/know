@@ -82,10 +82,39 @@ export class KnowledgeGraphService {
     }
   }
 
-  static async deleteGraph(documentId: string): Promise<void> {
+  static async deleteGraphById(graphId: string): Promise<void> {
     try {
-      debug.log("Attempting to delete graph for document:", documentId);
+      // Delete edges first
+      const { error: edgesError } = await supabase
+        .from("graph_edges")
+        .delete()
+        .eq("graph_id", graphId);
 
+      if (edgesError) throw edgesError;
+
+      // Delete nodes
+      const { error: nodesError } = await supabase
+        .from("graph_nodes")
+        .delete()
+        .eq("graph_id", graphId);
+
+      if (nodesError) throw nodesError;
+
+      // Finally delete the graph
+      const { error: graphError } = await supabase
+        .from("knowledge_graphs")
+        .delete()
+        .eq("id", graphId);
+
+      if (graphError) throw graphError;
+    } catch (error) {
+      debug.error("Error in deleteGraphById:", error);
+      throw error;
+    }
+  }
+
+  static async deleteGraphByDocumentId(documentId: string): Promise<void> {
+    try {
       // First get the graph ID
       const { data: graph, error: graphFetchError } = await supabase
         .from("knowledge_graphs")
@@ -93,60 +122,12 @@ export class KnowledgeGraphService {
         .eq("document_id", documentId)
         .single();
 
-      if (graphFetchError) {
-        debug.error("Error fetching graph:", graphFetchError);
-        throw graphFetchError;
-      }
+      if (graphFetchError) throw graphFetchError;
+      if (!graph) return;
 
-      if (!graph) {
-        debug.error("No graph found for document:", documentId);
-        return;
-      }
-
-      debug.log("Found graph with ID:", graph.id);
-
-      // Delete edges first
-      const { data: deletedEdges, error: edgesError } = await supabase
-        .from("graph_edges")
-        .delete()
-        .eq("graph_id", graph.id)
-        .select();
-
-      if (edgesError) {
-        debug.error("Error deleting edges:", edgesError);
-        throw edgesError;
-      }
-      debug.log("Deleted edges:", deletedEdges);
-
-      // Delete nodes
-      const { data: deletedNodes, error: nodesError } = await supabase
-        .from("graph_nodes")
-        .delete()
-        .eq("graph_id", graph.id)
-        .select();
-
-      if (nodesError) {
-        debug.error("Error deleting nodes:", nodesError);
-        throw nodesError;
-      }
-      debug.log("Deleted nodes:", deletedNodes);
-
-      // Finally delete the graph
-      const { data: deletedGraph, error: graphError } = await supabase
-        .from("knowledge_graphs")
-        .delete()
-        .eq("id", graph.id)
-        .select();
-
-      if (graphError) {
-        debug.error("Error deleting graph:", graphError);
-        throw graphError;
-      }
-      debug.log("Deleted graph:", deletedGraph);
-
-      debug.log("Graph and related data deleted successfully");
+      await this.deleteGraphById(graph.id);
     } catch (error) {
-      debug.error("Error in deleteGraph:", error);
+      debug.error("Error in deleteGraphByDocumentId:", error);
       throw error;
     }
   }

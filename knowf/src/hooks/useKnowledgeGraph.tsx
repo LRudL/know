@@ -62,8 +62,8 @@ export function useDocumentGraph(documentId: string) {
     isPending: isDeleting,
   }: UseMutationResult<void, Error, void> = useMutation({
     mutationFn: async () => {
-      await KnowledgeGraphService.deleteGraph(documentId);
-      // Add a small delay to ensure deletion completes
+      if (!graph?.id) throw new Error("No graph to delete");
+      await KnowledgeGraphService.deleteGraphByDocumentId(documentId);
       await new Promise((resolve) => setTimeout(resolve, 400));
     },
     onSuccess: () => {
