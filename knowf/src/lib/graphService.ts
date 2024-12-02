@@ -27,7 +27,7 @@ export class KnowledgeGraphService {
     } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("No auth session");
 
-    const response = await fetch(`/api/content_map/${documentId}`, {
+    const response = await fetch(`/api/content_map/run/${documentId}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${session.access_token}`,

@@ -46,7 +46,7 @@ export function useDocumentGraph(documentId: string) {
   const {
     mutate: generateGraph,
     isPending: isGenerating,
-  }: UseMutationResult<void, Error, void> = useMutation({
+  }: UseMutationResult<string, Error, void> = useMutation({
     mutationFn: () => KnowledgeGraphService.generateGraph(documentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
