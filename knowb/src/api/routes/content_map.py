@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 import traceback
+import traceback
 from supabase import Client
 from io import BytesIO
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from postgrest import APIResponse
@@ -25,12 +26,6 @@ def graph_exists_for_document(document_id: str, client: Client) -> bool:
 
 
 def get_document_content(document_id: str, client: Client) -> bytes:
-    # Check if graph already exists
-    if graph_exists_for_document(document_id, client):
-        raise HTTPException(
-            status_code=400,
-            detail={"message": "Knowledge graph already exists"},
-        )
 
     # Get the document
     doc_result = client.from_("documents").select("*").eq("id", document_id).execute()
@@ -95,21 +90,61 @@ def check_data_and_cleanup_on_fail(
 
 
 @router.post("/run/{document_id}")
-async def run_content_map(document_id: str, token: str = Depends(security)):
+async def run_content_map(
+    document_id: str, background_tasks: BackgroundTasks, token: str = Depends(security)
+):
     try:
         # Create client with user's token
         client = get_supabase_client(token)
+
+        # Check if graph exists
+        if graph_exists_for_document(document_id, client):
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "Knowledge graph already exists"},
+            )
+
+        # Insert new knowledge graph with "processing" status
+        graph_result = (
+            client.from_("knowledge_graphs")
+            .insert(
+                {
+                    "document_id": document_id,
+                    "status": "processing",  # Add this status field
+                }
+            )
+            .execute()
+        )
+
+        if not graph_result.data:
+            raise HTTPException(
+                status_code=500, detail="Failed to create knowledge graph"
+            )
+
+        graph_id = graph_result.data[0]["id"]
+
+        # Queue the background task
+        background_tasks.add_task(process_content_map, document_id, graph_id, token)
+
+        return {"status": "processing", "graph_id": graph_id}
+
+    except Exception as e:
+        print(f"[DEBUG] Error initiating content map: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail={"message": str(e), "type": type(e).__name__}
+        )
+
+
+async def process_content_map(document_id: str, graph_id: str, token: str):
+    try:
+        client = get_supabase_client(token)
         doc = get_document_content(document_id, client)
 
-        # Insert new knowledge graph
-        graph_id = insert_new_knowledge_graph(document_id, client)
+        # Generate the map
+        nodes, edges = make_content_map(doc)
 
-        (nodes, edges) = make_content_map(doc)
-
-        # Convert nodes to dictionaries and add graph_id
+        # Insert nodes and edges
         nodes_data = [{**vars(node), "graph_id": graph_id} for node in nodes]
-
-        # Convert edges to dictionaries and add graph_id
         edges_data = [{**vars(edge), "graph_id": graph_id} for edge in edges]
 
         nodes_result = client.from_("graph_nodes").insert(nodes_data).execute()
@@ -118,10 +153,14 @@ async def run_content_map(document_id: str, token: str = Depends(security)):
         edges_result = client.from_("graph_edges").insert(edges_data).execute()
         check_data_and_cleanup_on_fail(client, graph_id, edges_result, "edges")
 
-        return {"status": "success", "graph_id": graph_id}
+        # Update graph status to complete
+        client.from_("knowledge_graphs").update({"status": "complete"}).eq(
+            "id", graph_id
+        ).execute()
+
     except Exception as e:
-        print(f"[DEBUG] Detailed error: {str(e)}")
-        print(f"[DEBUG] Stack trace: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=500, detail={"message": str(e), "type": type(e).__name__}
-        )
+        print(f"[DEBUG] Background task error: {str(e)}\n{traceback.format_exc()}")
+        # Update graph status to error
+        client.from_("knowledge_graphs").update(
+            {"status": "error", "error_message": str(e)}
+        ).eq("id", graph_id).execute()

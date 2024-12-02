@@ -18,46 +18,85 @@ export interface KnowledgeGraph {
   id: string;
   nodes: KnowledgeGraphNode[];
   edges: KnowledgeGraphEdge[];
+  status: "processing" | "complete" | "error";
+  error_message?: string;
 }
 
 export class KnowledgeGraphService {
+  private static createEmptyGraph(
+    id: string,
+    status: string,
+    error_message?: string
+  ): KnowledgeGraph {
+    return {
+      id,
+      nodes: [],
+      edges: [],
+      status: status as "processing" | "complete" | "error",
+      error_message,
+    };
+  }
+
   static async generateGraph(documentId: string): Promise<string> {
     const {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("No auth session");
 
-    const response = await fetch(`/api/content_map/run/${documentId}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    });
+    try {
+      const response = await fetch(`/api/content_map/run/${documentId}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        signal: AbortSignal.timeout(10000),
+      });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail?.message || "Failed to generate graph");
+      const data = await response.json().catch(() => ({
+        detail: { message: "Internal Server Error" },
+      }));
+
+      if (!response.ok) {
+        debug.log(
+          "[Generate] Request failed but graph may still be processing"
+        );
+        throw new Error(data.detail?.message || "Failed to generate graph");
+      }
+
+      return data.graph_id;
+    } catch (error) {
+      debug.log(
+        "[Generate] Error occurred but graph generation may continue in background"
+      );
+      throw error;
     }
-
-    const data = await response.json();
-    return data.graph_id;
   }
 
   static async getGraphForDocument(
     documentId: string
   ): Promise<KnowledgeGraph | null> {
     try {
-      // First get the knowledge graph
+      debug.log("[Poll] Checking graph status for document:", documentId);
+
       const { data: graphs, error: graphError } = await supabase
         .from("knowledge_graphs")
         .select("*")
         .eq("document_id", documentId)
-        .maybeSingle(); // IMPORTANT: This is needed because the graph might not exist
+        .maybeSingle();
 
       if (graphError) throw graphError;
       if (!graphs) return null;
 
-      // Get nodes
+      debug.log("[Poll] Current graph status:", graphs.status);
+
+      if (graphs.status === "processing") {
+        return this.createEmptyGraph(
+          graphs.id,
+          graphs.status,
+          graphs.error_message
+        );
+      }
+
       const { data: nodes, error: nodesError } = await supabase
         .from("graph_nodes")
         .select("*")
@@ -66,7 +105,6 @@ export class KnowledgeGraphService {
 
       if (nodesError) throw nodesError;
 
-      // Get edges - modified to use node IDs from the nodes we just fetched
       const { data: edges, error: edgesError } = await supabase
         .from("graph_edges")
         .select("*")
@@ -78,6 +116,8 @@ export class KnowledgeGraphService {
         id: graphs.id,
         nodes: nodes || [],
         edges: edges || [],
+        status: graphs.status,
+        error_message: graphs.error_message,
       };
     } catch (error) {
       debug.error("Error fetching graph:", error);
@@ -87,7 +127,6 @@ export class KnowledgeGraphService {
 
   static async deleteGraphById(graphId: string): Promise<void> {
     try {
-      // Delete edges first
       const { error: edgesError } = await supabase
         .from("graph_edges")
         .delete()
@@ -95,7 +134,6 @@ export class KnowledgeGraphService {
 
       if (edgesError) throw edgesError;
 
-      // Delete nodes
       const { error: nodesError } = await supabase
         .from("graph_nodes")
         .delete()
@@ -103,7 +141,6 @@ export class KnowledgeGraphService {
 
       if (nodesError) throw nodesError;
 
-      // Finally delete the graph
       const { error: graphError } = await supabase
         .from("knowledge_graphs")
         .delete()
@@ -118,7 +155,6 @@ export class KnowledgeGraphService {
 
   static async deleteGraphByDocumentId(documentId: string): Promise<void> {
     try {
-      // First get the graph ID
       const { data: graph, error: graphFetchError } = await supabase
         .from("knowledge_graphs")
         .select("id")
@@ -137,13 +173,28 @@ export class KnowledgeGraphService {
 
   static async getGraph(graphId: string): Promise<KnowledgeGraph | null> {
     try {
-      // Early return if graphId is empty or invalid
       if (!graphId || graphId.trim() === "") {
         debug.warn("Invalid graphId provided to getGraph");
         return null;
       }
 
-      // Get nodes
+      const { data: graph, error: graphError } = await supabase
+        .from("knowledge_graphs")
+        .select("status, error_message")
+        .eq("id", graphId)
+        .single();
+
+      if (graphError) throw graphError;
+      if (!graph) return null;
+
+      if (graph.status === "processing") {
+        return this.createEmptyGraph(
+          graphId,
+          graph.status,
+          graph.error_message
+        );
+      }
+
       const { data: nodes, error: nodesError } = await supabase
         .from("graph_nodes")
         .select("*")
@@ -152,7 +203,6 @@ export class KnowledgeGraphService {
 
       if (nodesError) throw nodesError;
 
-      // Get edges
       const { data: edges, error: edgesError } = await supabase
         .from("graph_edges")
         .select("*")
@@ -164,6 +214,8 @@ export class KnowledgeGraphService {
         id: graphId,
         nodes: nodes || [],
         edges: edges || [],
+        status: graph.status,
+        error_message: graph.error_message,
       };
     } catch (error) {
       debug.error("Error fetching graph:", error);

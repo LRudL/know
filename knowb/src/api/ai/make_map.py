@@ -82,6 +82,8 @@ def make_content_map(
     print("FINAL RESPONSE")
     print(final_response.content[0].text)
 
+    print("DONE")
+
     # Parse the response into nodes and edges
     nodes, edges = parse_graph_output(final_response.content[0].text)
     return nodes, edges

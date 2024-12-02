@@ -37,9 +37,16 @@ export function useDocumentGraph(documentId: string) {
   const queryClient = useQueryClient();
   const queryKey = ["document-graph", documentId];
 
-  const { data: graph, isLoading } = useQuery({
+  const { data: graph, isLoading } = useQuery<KnowledgeGraph | null, Error>({
     queryKey,
     queryFn: () => KnowledgeGraphService.getGraphForDocument(documentId),
+    refetchInterval: (query) => {
+      debug.log("[Poll] Checking if should continue polling:", {
+        status: query.state.data?.status,
+        exists: !!query.state.data,
+      });
+      return query.state.data?.status === "processing" ? 2000 : false;
+    },
   });
 
   // Mutation for generating graph
@@ -48,11 +55,25 @@ export function useDocumentGraph(documentId: string) {
     isPending: isGenerating,
   }: UseMutationResult<string, Error, void> = useMutation({
     mutationFn: () => KnowledgeGraphService.generateGraph(documentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey });
+    onMutate: async () => {
+      // Set initial optimistic data
+      const newGraph = {
+        id: "pending",
+        nodes: [],
+        edges: [],
+        status: "processing",
+      };
+      queryClient.setQueryData(queryKey, newGraph);
+      return { previousGraph: null };
     },
     onError: (error) => {
       debug.error("Error generating graph:", error);
+      // Never clear processing state on timeout - backend is still working
+      if (!(error instanceof Error && error.message.includes("timeout"))) {
+        queryClient.setQueryData(queryKey, null);
+      }
+      // Add this to force a refetch after error
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 
@@ -85,5 +106,7 @@ export function useDocumentGraph(documentId: string) {
     deleteGraph,
     isDeleting,
     exists: !!graph,
+    status: graph?.status,
+    error: graph?.error_message,
   };
 }

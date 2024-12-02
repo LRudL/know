@@ -48,9 +48,10 @@ CREATE TABLE documents (
 CREATE TABLE knowledge_graphs (
     id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
     document_id uuid REFERENCES documents(id) ON DELETE CASCADE NOT NULL,
+    status text NOT NULL DEFAULT 'processing',
+    error_message text,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
 
 CREATE TABLE graph_nodes (
     id text PRIMARY KEY CHECK (id ~ '^node_[a-zA-Z0-9]+$'),

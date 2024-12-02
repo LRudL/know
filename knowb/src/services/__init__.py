@@ -12,20 +12,11 @@ def get_supabase_client(access_token: str = None) -> Client:
     service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
     print(f"[DEBUG] Using URL: {url}")
-    print(f"[DEBUG] Service key starts with: {service_key[:20]}...")
 
     if not url or not service_key:
         raise Exception("Missing Supabase credentials")
 
     client = create_client(url, service_key)
-
-    # Test the connection
-    try:
-        test_query = client.table("documents").select("count").execute()
-        print(f"[DEBUG] Connection test result: {test_query}")
-    except Exception as e:
-        print(f"[DEBUG] Connection test error: {str(e)}")
-        raise
 
     return client
 

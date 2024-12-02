@@ -70,6 +70,10 @@ function DocumentActions({ doc }: { doc: any }) {
           >
             {isGenerating ? "Generating..." : "Generate Knowledge Map"}
           </button>
+        ) : graph?.status === "processing" ? (
+          <div className="bg-yellow-500 text-white rounded px-4 py-2">
+            Processing Map...
+          </div>
         ) : (
           <>
             <Link
@@ -79,10 +83,7 @@ function DocumentActions({ doc }: { doc: any }) {
               View Map
             </Link>
             <button
-              onClick={() => {
-                debug.log("Delete button clicked");
-                deleteGraph();
-              }}
+              onClick={() => deleteGraph()}
               disabled={isDeleting}
               className="bg-red-500 text-white rounded px-4 py-2 disabled:bg-red-300"
             >
