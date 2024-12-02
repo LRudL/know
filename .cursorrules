@@ -352,7 +352,7 @@ Phase 2: Document Management
 
 Create document upload UI-DONE
 Set up Supabase storage bucket configuration-DONE
-Implement backend endpoint for document processing
+Implement backend endpoint for document processing-DONE
 Add document list view-DONE
 
 Milestones:
