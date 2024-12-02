@@ -1,24 +1,87 @@
-def generate_content_map(graph_id: str, document) -> tuple[list[dict], list[dict]]:
-    # Create nodes (using the test data for now)
-    nodes = [
-        {
-            "id": f"node_{i+1}",
-            "graph_id": graph_id,
-            "summary": f"node {i+1}",
-            "content": "testing" * (i + 1),
-            "supporting_quotes": ["I returned..."] if i == 0 else [],
-            "order_index": i,
-        }
-        for i in range(3)
-    ]
+import base64
+from anthropic import Anthropic
+import os
 
-    # Create edges
-    edges = [
-        {
-            "parent_id": "node_1",
-            "child_id": "node_2",
-            "graph_id": graph_id,  # Add graph_id to edges
-        }
-    ]
+from src.api.structs import ContentMapEdge, ContentMapNode
+from src.api.ai.prompts import BRAINSTORM_PROMPT, FINAL_PROMPT, parse_graph_output
 
+
+def make_content_map(
+    pdf_content: bytes,
+) -> tuple[list[ContentMapNode], list[ContentMapEdge]]:
+    # Ensure we have valid PDF content
+    if not pdf_content.startswith(b"%PDF"):
+        raise ValueError("Invalid PDF content received")
+
+    # Use the exact same encoding process as the working example
+    pdf_base64 = base64.b64encode(pdf_content).decode("utf-8")
+
+    # Initialize Anthropic client
+    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    # If we get here, proceed with brainstorming call
+    interim_response = client.beta.messages.create(
+        model="claude-3-5-sonnet-20240620",
+        betas=["pdfs-2024-09-25"],
+        max_tokens=4096,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": pdf_base64,
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": BRAINSTORM_PROMPT,
+                    },
+                ],
+            }
+        ],
+    )
+
+    print("INTERIM RESPONSE")
+    print(interim_response.content[0].text)
+
+    # Make final call with the brainstorming results
+    final_response = client.beta.messages.create(
+        model="claude-3-5-sonnet-20240620",
+        betas=["pdfs-2024-09-25"],
+        max_tokens=4096,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": pdf_base64,
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": BRAINSTORM_PROMPT,
+                    },
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": interim_response.content[0].text,
+            },
+            {"role": "user", "content": FINAL_PROMPT},
+        ],
+    )
+
+    print("FINAL RESPONSE")
+    print(final_response.content[0].text)
+
+    # Parse the response into nodes and edges
+    nodes, edges = parse_graph_output(final_response.content[0].text)
     return nodes, edges

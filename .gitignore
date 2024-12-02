@@ -1,3 +1,7 @@
+# random
+testfiles/
+*/test.ipynb
+
 # Dependencies
 node_modules/
 /.pnp
