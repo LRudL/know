@@ -49,9 +49,10 @@ export class KnowledgeGraphService {
         .from("knowledge_graphs")
         .select("*")
         .eq("document_id", documentId)
-        .single();
+        .maybeSingle(); // IMPORTANT: This is needed because the graph might not exist
 
-      if (graphError || !graphs) return null;
+      if (graphError) throw graphError;
+      if (!graphs) return null;
 
       // Get nodes
       const { data: nodes, error: nodesError } = await supabase
