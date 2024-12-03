@@ -138,9 +138,10 @@ function useGraph(graphId: string) {
 }
 
 export default function KnowledgeMap({ params }: { params: { id: string } }) {
+  const paramsPromise = Promise.resolve(params);
   return (
     <QueryProvider>
-      <KnowledgeMapContent params={Promise.resolve(params)} />
+      <KnowledgeMapContent params={paramsPromise} />
     </QueryProvider>
   );
 }
