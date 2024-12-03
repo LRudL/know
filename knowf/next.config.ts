@@ -3,10 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
-    console.log("Webpack build environment:", {
-      buildId,
-      dev,
-      isServer,
+    console.log("Build environment:", {
+      nodeVersion: process.version,
+      nextVersion: process.env.NEXT_RUNTIME,
+      env: process.env.NODE_ENV,
     });
     return config;
   },
