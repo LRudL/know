@@ -140,11 +140,14 @@ function useGraph(graphId: string) {
   });
 }
 
-export default function KnowledgeMap({ params }: { params: { id: string } }) {
-  const paramsPromise = Promise.resolve(params);
+export default function KnowledgeMap({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   return (
     <QueryProvider>
-      <KnowledgeMapContent params={paramsPromise} />
+      <KnowledgeMapContent params={params} />
     </QueryProvider>
   );
 }
