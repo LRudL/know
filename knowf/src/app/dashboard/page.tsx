@@ -1,7 +1,7 @@
 "use client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { debug } from "@/lib/debug";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
@@ -10,7 +10,6 @@ import {
   QueryClient,
   QueryClientProvider,
   useMutation,
-  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { usePromptName } from "@/hooks/usePromptName";
@@ -18,11 +17,19 @@ import { usePromptName } from "@/hooks/usePromptName";
 // Create a client
 const queryClient = new QueryClient();
 
-function DocumentActions({ doc }: { doc: any }) {
+type Document = {
+  id: string;
+  title: string;
+  file_size: number;
+  storage_path: string;
+  user_id: string;
+  created_at: string;
+};
+
+function DocumentActions({ doc }: { doc: Document }) {
   const queryClient = useQueryClient();
   const {
     graph,
-    isLoading,
     generateGraph,
     isGenerating,
     deleteGraph,
@@ -30,7 +37,7 @@ function DocumentActions({ doc }: { doc: any }) {
     exists,
   } = useDocumentGraph(doc.id);
 
-  const { data: promptName } = usePromptName(graph?.prompt_id);
+  const { data: promptName } = usePromptName(graph?.prompt_id ?? null);
 
   const { mutate: deleteDocument, isPending: isDeletingDocument } = useMutation(
     {
@@ -118,18 +125,10 @@ export default function DashboardWrapper() {
 function Dashboard() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login");
-    } else if (user) {
-      fetchDocuments();
-    }
-  }, [user, loading, router]);
-
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     const { data: documents, error } = await supabase
       .from("documents")
       .select("*")
@@ -140,10 +139,20 @@ function Dashboard() {
     } else {
       setDocuments(documents);
     }
-  };
+  }, [user?.id]);
 
-  const handleFileUpload = async (event: any) => {
-    const file = event.target.files[0];
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    } else if (user) {
+      fetchDocuments();
+    }
+  }, [user, loading, router, fetchDocuments]);
+
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
     if (!file) return;
 
     // Add timestamp to filename to ensure uniqueness

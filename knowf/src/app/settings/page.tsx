@@ -100,7 +100,11 @@ export default function SettingsPage() {
 
       const userPrompts = prompts
         .filter((p) => p.user_id === user.id)
-        .map(({ id, ...rest }) => rest);
+        .map((prompt) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id, ...rest } = prompt;
+          return rest;
+        });
 
       const { data: newPrompts, error: insertError } = await supabase
         .from("prompts")

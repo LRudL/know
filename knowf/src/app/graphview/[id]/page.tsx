@@ -1,6 +1,5 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
 import ReactFlow, {
   ConnectionMode,
   Edge,
@@ -23,7 +22,7 @@ import {
 } from "@/lib/graphService";
 
 const CustomNode = React.memo(
-  ({ data, selected }: { data: any; selected: boolean }) => {
+  ({ data, selected }: { data: KnowledgeGraphNode; selected: boolean }) => {
     return (
       <div
         className={`bg-white p-1 rounded shadow border text-sm ${
@@ -50,6 +49,8 @@ const CustomNode = React.memo(
     );
   }
 );
+
+CustomNode.displayName = "CustomNode";
 
 const nodeTypes = {
   custom: CustomNode,
@@ -170,7 +171,7 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
 
   const elements = getLayoutedElements(graph.nodes, graph.edges);
 
-  const onNodeClick = (_: any, node: Node) => {
+  const onNodeClick = (_event: React.MouseEvent, node: Node) => {
     setSelectedNode(node.data);
   };
 
@@ -266,7 +267,7 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
                     {selectedNode.supporting_quotes.map(
                       (quote: string, i: number) => (
                         <p key={i} className="italic bg-gray-50 p-2 rounded">
-                          "{quote}"
+                          &ldquo;{quote}&rdquo;
                         </p>
                       )
                     )}

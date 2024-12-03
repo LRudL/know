@@ -3,7 +3,6 @@ import {
   useMutation,
   useQueryClient,
   UseMutationResult,
-  UseQueryResult,
 } from "@tanstack/react-query";
 import { KnowledgeGraphService, KnowledgeGraph } from "@/lib/graphService";
 import { debug } from "@/lib/debug";
@@ -16,7 +15,7 @@ interface UseGraphResult {
 
 // For direct graph access - used in graph view
 export function useGraph(graphId: string): UseGraphResult {
-  const queryClient = useQueryClient();
+  // const queryClient = useQueryClient();
   const queryKey = ["graph", graphId];
 
   const { data, isLoading } = useQuery<KnowledgeGraph | null, Error>({
