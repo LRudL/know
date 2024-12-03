@@ -201,10 +201,12 @@ function Dashboard() {
   const handleSignOut = async () => {
     try {
       await signOut();
-      router.push("/");
-      debug.log("User signed out successfully");
+      debug.log("Signed out successfully, redirecting to login");
     } catch (error) {
-      debug.error("Error signing out:", error);
+      debug.error("Error during sign out process:", error);
+    } finally {
+      // Always redirect to login
+      router.push("/login");
     }
   };
 

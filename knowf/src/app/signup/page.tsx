@@ -16,13 +16,18 @@ export default function SignUp() {
 
     try {
       debug.log("Attempting signup for email:", email);
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
 
+      debug.log("Signup response:", { data, error });
+
       if (error) {
-        debug.error("Signup error:", error.message);
+        debug.error("Signup error:", error.message, error);
         setErrorMsg(error.message);
         return;
       }
