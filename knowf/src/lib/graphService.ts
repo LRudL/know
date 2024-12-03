@@ -20,13 +20,15 @@ export interface KnowledgeGraph {
   edges: KnowledgeGraphEdge[];
   status: "processing" | "complete" | "error";
   error_message?: string;
+  prompt_id?: string;
 }
 
 export class KnowledgeGraphService {
   private static createEmptyGraph(
     id: string,
     status: string,
-    error_message?: string
+    error_message?: string,
+    prompt_id?: string
   ): KnowledgeGraph {
     return {
       id,
@@ -34,6 +36,7 @@ export class KnowledgeGraphService {
       edges: [],
       status: status as "processing" | "complete" | "error",
       error_message,
+      prompt_id,
     };
   }
 
@@ -118,6 +121,7 @@ export class KnowledgeGraphService {
         edges: edges || [],
         status: graphs.status,
         error_message: graphs.error_message,
+        prompt_id: graphs.prompt_id,
       };
     } catch (error) {
       debug.error("Error fetching graph:", error);

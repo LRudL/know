@@ -13,6 +13,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { usePromptName } from "@/hooks/usePromptName";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -28,6 +29,8 @@ function DocumentActions({ doc }: { doc: any }) {
     isDeleting,
     exists,
   } = useDocumentGraph(doc.id);
+
+  const { data: promptName } = usePromptName(graph?.prompt_id);
 
   const { mutate: deleteDocument, isPending: isDeletingDocument } = useMutation(
     {
@@ -80,7 +83,7 @@ function DocumentActions({ doc }: { doc: any }) {
               href={`/graphview/${graph?.id}`}
               className="bg-green-500 text-white rounded px-4 py-2"
             >
-              View Map
+              View Map (from prompt: {promptName})
             </Link>
             <button
               onClick={() => deleteGraph()}
@@ -203,12 +206,20 @@ function Dashboard() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <button
-          onClick={handleSignOut}
-          className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent px-4 py-2"
-        >
-          Sign Out
-        </button>
+        <div className="flex gap-4">
+          <button
+            onClick={() => router.push("/settings")}
+            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent px-4 py-2"
+          >
+            Settings
+          </button>
+          <button
+            onClick={handleSignOut}
+            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent px-4 py-2"
+          >
+            Sign Out
+          </button>
+        </div>
       </div>
       <p>Welcome, {user.email}</p>
       <p className="text-sm text-gray-500">User ID: {user.id}</p>

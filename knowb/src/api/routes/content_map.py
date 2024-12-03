@@ -7,10 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from postgrest import APIResponse
+import logging
 from src.services import get_supabase_client, supabase
 from src.services.security import security, get_user_id_from_token
 from src.api.ai.make_map import make_content_map
-import logging
+from src.users.user_settings import get_user_prompt
 
 router = APIRouter()
 
@@ -94,23 +95,20 @@ async def run_content_map(
     document_id: str, background_tasks: BackgroundTasks, token: str = Depends(security)
 ):
     try:
-        # Create client with user's token
         client = get_supabase_client(token)
+        user_id = get_user_id_from_token(token)
 
-        # Check if graph exists
-        if graph_exists_for_document(document_id, client):
-            raise HTTPException(
-                status_code=400,
-                detail={"message": "Knowledge graph already exists"},
-            )
+        # Get prompt info once
+        user_prompt = await get_user_prompt(user_id)
 
-        # Insert new knowledge graph with "processing" status
+        # Insert new knowledge graph with prompt_id
         graph_result = (
             client.from_("knowledge_graphs")
             .insert(
                 {
                     "document_id": document_id,
-                    "status": "processing",  # Add this status field
+                    "status": "processing",
+                    "prompt_id": user_prompt.id,  # Store which prompt was used
                 }
             )
             .execute()
@@ -139,9 +137,13 @@ async def process_content_map(document_id: str, graph_id: str, token: str):
     try:
         client = get_supabase_client(token)
         doc = get_document_content(document_id, client)
+        user_id = get_user_id_from_token(token)
 
-        # Generate the map
-        nodes, edges = make_content_map(doc)
+        # Get the prompt once and pass it through
+        user_prompt = await get_user_prompt(user_id)
+
+        # Pass the entire UserPrompt object
+        nodes, edges = make_content_map(doc, user_prompt)
 
         # Insert nodes and edges
         nodes_data = [{**vars(node), "graph_id": graph_id} for node in nodes]

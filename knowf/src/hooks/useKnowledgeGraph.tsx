@@ -41,10 +41,10 @@ export function useDocumentGraph(documentId: string) {
     queryKey,
     queryFn: () => KnowledgeGraphService.getGraphForDocument(documentId),
     refetchInterval: (query) => {
-      debug.log("[Poll] Checking if should continue polling:", {
-        status: query.state.data?.status,
-        exists: !!query.state.data,
-      });
+      // debug.log("[Poll] Checking if should continue polling:", {
+      // status: query.state.data?.status,
+      // exists: !!query.state.data,
+      // });
       return query.state.data?.status === "processing" ? 2000 : false;
     },
   });

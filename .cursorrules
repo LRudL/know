@@ -35,6 +35,13 @@ Included created_at timestamps throughout for debugging and auditing
 
 
 ```sql
+CREATE TABLE user_settings (
+    user_id uuid PRIMARY KEY REFERENCES auth.users NOT NULL,
+    current_prompt_id uuid REFERENCES prompts(id),
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- Documents table - core document metadata
 CREATE TABLE documents (
     id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -50,7 +57,20 @@ CREATE TABLE knowledge_graphs (
     document_id uuid REFERENCES documents(id) ON DELETE CASCADE NOT NULL,
     status text NOT NULL DEFAULT 'processing',
     error_message text,
+    prompt_id uuid REFERENCES prompts(id),
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE prompts (
+    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id uuid REFERENCES auth.users,  -- null means it's a default prompt
+    name text NOT NULL,
+    prompt_type text NOT NULL DEFAULT 'pair',  -- for future extensibility
+    prompt_texts jsonb NOT NULL,  -- stores the prompts in JSON format
+    is_active boolean DEFAULT true,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(user_id, name)
 );
 
 CREATE TABLE graph_nodes (
@@ -365,23 +385,20 @@ Basic UI flows complete
 
 Phase 3: Knowledge Graph Generation
 
-Create API endpoint that:
-
+Create API endpoint that:-DONE
 Takes document content
 Calls Anthropic API to extract ideas
 Structures response into DAG format
 Stores in database
 
 
-Add basic visualization of the knowledge graph
+Add basic visualization of the knowledge graph-DONE
 Implement error handling and processing status updates
 
 Milestones:
 Successful DAG generation from documents
 Data correctly stored in database
 Basic visualization working
-
-
 
 
 

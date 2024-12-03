@@ -3,12 +3,19 @@ from anthropic import Anthropic
 import os
 
 from src.api.structs import ContentMapEdge, ContentMapNode
-from src.api.ai.prompts import BRAINSTORM_PROMPT, FINAL_PROMPT, parse_graph_output
+from src.api.ai.prompts import parse_graph_output
+from src.users.user_settings import UserPrompt
 
 
 def make_content_map(
     pdf_content: bytes,
+    user_prompt: UserPrompt,
 ) -> tuple[list[ContentMapNode], list[ContentMapEdge]]:
+    # Use the prompt texts directly from the UserPrompt object
+    brainstorm_prompt = user_prompt.prompt_texts["brainstorm_prompt"]
+    final_prompt = user_prompt.prompt_texts["final_prompt"]
+    print(f"Fetched prompts:\n{brainstorm_prompt}\n------\n{final_prompt}")
+
     # Ensure we have valid PDF content
     if not pdf_content.startswith(b"%PDF"):
         raise ValueError("Invalid PDF content received")
@@ -38,7 +45,7 @@ def make_content_map(
                     },
                     {
                         "type": "text",
-                        "text": BRAINSTORM_PROMPT,
+                        "text": brainstorm_prompt,
                     },
                 ],
             }
@@ -67,7 +74,7 @@ def make_content_map(
                     },
                     {
                         "type": "text",
-                        "text": BRAINSTORM_PROMPT,
+                        "text": brainstorm_prompt,
                     },
                 ],
             },
@@ -75,7 +82,7 @@ def make_content_map(
                 "role": "assistant",
                 "content": interim_response.content[0].text,
             },
-            {"role": "user", "content": FINAL_PROMPT},
+            {"role": "user", "content": final_prompt},
         ],
     )
 
