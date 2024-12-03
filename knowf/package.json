@@ -21,6 +21,7 @@
     "autoprefixer": "^10",
     "cssnano": "^6",
     "dagre": "^0.8.5",
+    "@types/dagre": "^0.7.52",
     "eslint": "^8",
     "eslint-config-next": "15.0.3",
     "next": "15.0.3",
@@ -33,8 +34,5 @@
   },
   "engines": {
     "node": ">=18.17.0"
-  },
-  "devDependencies": {
-    "@types/dagre": "^0.7.52"
   }
 }
