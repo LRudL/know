@@ -8,6 +8,7 @@ from src.services.security import security, get_user_id_from_token
 router = APIRouter()
 
 
+"""
 @router.get("/")
 async def get_documents(token: str = Depends(security)):
     try:
@@ -21,10 +22,9 @@ async def get_documents(token: str = Depends(security)):
         print(f"[DEBUG] Error in get_documents: {str(e)}")
         raise
 
-
 @router.get("/user_document_content/{document_id}")
 async def get_user_document_content(document_id: str, token: str = Depends(security)):
-    """Version that uses user's token instead of service role"""
+    # Version that uses user's token instead of service role
     try:
         # Create client with user's token
         client = get_supabase_client(token)
@@ -87,26 +87,7 @@ async def get_document_content(document_id: str, token: str = Depends(security))
 class KnowledgeMapRequest(BaseModel):
     documentId: str
 
-
-@router.post("/generate_knowledge_map")
-async def generate_knowledge_map(request: KnowledgeMapRequest):
-    try:
-        # Dummy response matching your schema
-        return {
-            "graph_id": "123e4567-e89b-12d3-a456-426614174000",
-            "nodes": [
-                {
-                    "id": "node_1",
-                    "content": "Main concept",
-                    "supporting_quotes": "Sample quote",
-                    "summary": "Brief summary",
-                    "order_index": 1,
-                }
-            ],
-            "edges": [{"parent_id": "node_1", "child_id": "node_2"}],
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+"""
 
 
 @router.get("/debug/user_id")
