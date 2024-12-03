@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
       nextVersion: process.env.NEXT_RUNTIME,
       env: process.env.NODE_ENV,
     });
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@": "./src",
+    };
     return config;
   },
 };
