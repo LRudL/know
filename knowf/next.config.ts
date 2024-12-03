@@ -1,3 +1,4 @@
+import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -10,7 +11,7 @@ const nextConfig: NextConfig = {
     });
     config.resolve.alias = {
       ...config.resolve.alias,
-      "@": "./src",
+      "@": path.join(__dirname, "src"),
     };
     return config;
   },
