@@ -21,6 +21,9 @@ import {
   KnowledgeGraphService,
 } from "@/lib/graphService";
 
+console.log("React version:", React.version);
+console.log("Node version:", process.version);
+
 const CustomNode = React.memo(
   ({ data, selected }: { data: KnowledgeGraphNode; selected: boolean }) => {
     return (
