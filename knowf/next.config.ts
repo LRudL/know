@@ -9,6 +9,17 @@ const nextConfig: NextConfig = {
       nextVersion: process.env.NEXT_RUNTIME,
       env: process.env.NODE_ENV,
     });
+    console.log("Build environment details:", {
+      cwd: process.cwd(),
+      dirname: __dirname,
+      files: require("fs").readdirSync(process.cwd()),
+      parentFiles: require("fs").readdirSync(".."),
+      envVars: {
+        VERCEL: process.env.VERCEL,
+        VERCEL_ENV: process.env.VERCEL_ENV,
+        VERCEL_URL: process.env.VERCEL_URL,
+      },
+    });
     config.resolve.alias = {
       ...config.resolve.alias,
       "@": path.join(__dirname, "src"),
