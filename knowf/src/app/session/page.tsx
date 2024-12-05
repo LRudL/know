@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { flushSync } from "react-dom";
 import { debug } from "@/lib/debug";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";

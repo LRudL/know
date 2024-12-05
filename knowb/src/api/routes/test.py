@@ -6,6 +6,9 @@ import asyncio
 router = APIRouter()
 
 
+# This is a test endpoint for debugging backend streaming in a maximally-simple way.
+
+
 @router.get("/stream")
 async def stream(token: str = Depends(security)):
     async def event_generator():

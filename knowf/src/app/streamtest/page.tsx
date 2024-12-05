@@ -3,6 +3,8 @@ import { supabase } from "@/lib/supabase";
 import { useState } from "react";
 import { EventSourcePolyfill } from "event-source-polyfill";
 
+// This is a test page for debugging the streaming endpoint.
+
 export default function StreamTest() {
   const [messages, setMessages] = useState<string[]>([]);
 
