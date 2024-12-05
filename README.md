@@ -54,6 +54,15 @@ This will do the same for the backend (we exclude the Python virtual environment
 
 Now, if you go to http://localhost:3000, you should see the homepage.
 
+### Testing backend API endpoints in isolation
+
+If you go to [http://localhost:8000/docs](http://localhost:8000/docs), you can play with the API endpoints. However, you'll need to get your JWT authentication token. Do this by going to the frontend at [http://localhost:3000/dashboard](http://localhost:3000/dashboard), then: open browser dev tools, go to Application --> Storage --> Local Storage, and copy the access token value:
+
+<img width="488" alt="Screenshot 2024-12-05 at 20 57 34" src="https://github.com/user-attachments/assets/6fa52d6a-96f6-4efe-9a83-fb6dc543b531">
+
+Then click on "Authorize" (green text button with padlock) in [http://localhost:8000/docs](http://localhost:8000/docs), and after this you should be able to try out the API endpoints. If you need to look up IDs of things, go to Supabase's Table Editor.
+
+
 ## Gotchas
 
 - are there errors in the browser console?
