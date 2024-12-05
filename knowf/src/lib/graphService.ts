@@ -52,7 +52,7 @@ export class KnowledgeGraphService {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(120000),
       });
 
       const data = await response.json().catch(() => ({

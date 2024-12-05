@@ -137,104 +137,7 @@ CREATE TABLE learning_progress_updates (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Enable RLS on all tables
-ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE knowledge_graphs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE graph_nodes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE graph_edges ENABLE ROW LEVEL SECURITY;
-ALTER TABLE learning_progress ENABLE ROW LEVEL SECURITY;
-ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE learning_progress_updates ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies
-CREATE POLICY "Users can view their own documents"
-    ON documents FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own documents"
-    ON documents FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own documents"
-    ON documents FOR UPDATE
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own documents"
-    ON documents FOR DELETE
-    USING (auth.uid() = user_id);
-
--- Knowledge graphs policies (document ownership based)
-CREATE POLICY "Users can view graphs of their documents"
-    ON knowledge_graphs FOR SELECT
-    USING (EXISTS (
-        SELECT 1 FROM documents
-        WHERE documents.id = knowledge_graphs.document_id
-        AND documents.user_id = auth.uid()
-    ));
-
-CREATE POLICY "Users can insert graphs for their documents"
-    ON knowledge_graphs FOR INSERT
-    WITH CHECK (EXISTS (
-        SELECT 1 FROM documents
-        WHERE documents.id = knowledge_graphs.document_id
-        AND documents.user_id = auth.uid()
-    ));
-
-CREATE POLICY "Users can view nodes of their graphs"
-    ON graph_nodes FOR SELECT
-    USING (EXISTS (
-        SELECT 1 FROM knowledge_graphs
-        JOIN documents ON documents.id = knowledge_graphs.document_id
-        WHERE knowledge_graphs.id = graph_nodes.graph_id
-        AND documents.user_id = auth.uid()
-    ));
-
-CREATE POLICY "Users can view edges of their graphs"
-    ON graph_edges FOR SELECT
-    USING (EXISTS (
-        SELECT 1 FROM graph_nodes
-        JOIN knowledge_graphs ON knowledge_graphs.id = graph_nodes.graph_id
-        JOIN documents ON documents.id = knowledge_graphs.document_id
-        WHERE graph_nodes.id = graph_edges.parent_id
-        AND documents.user_id = auth.uid()
-    ));
-
--- Learning progress policies
-CREATE POLICY "Users can view their learning progress"
-    ON learning_progress FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can modify their learning progress"
-    ON learning_progress FOR ALL
-    USING (auth.uid() = user_id);
-
--- Chat session policies
-CREATE POLICY "Users can view their chat sessions"
-    ON chat_sessions FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can create chat sessions"
-    ON chat_sessions FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
-
--- Chat messages policies (session ownership based)
-CREATE POLICY "Users can view messages from their sessions"
-    ON chat_messages FOR SELECT
-    USING (EXISTS (
-        SELECT 1 FROM chat_sessions
-        WHERE chat_sessions.id = chat_messages.session_id
-        AND chat_sessions.user_id = auth.uid()
-    ));
-
--- Learning progress updates policies
-CREATE POLICY "Users can view their progress updates"
-    ON learning_progress_updates FOR SELECT
-    USING (EXISTS (
-        SELECT 1 FROM learning_progress
-        WHERE learning_progress.id = learning_progress_updates.learning_progress_id
-        AND learning_progress.user_id = auth.uid()
-    ));
+-- [LOTS OF RLS POLICIES OMITTED]
 
 -- Indexes for common queries
 CREATE INDEX idx_documents_user_id ON documents(user_id);
@@ -247,7 +150,6 @@ CREATE INDEX idx_graph_nodes_order ON graph_nodes(graph_id, order_index);
 CREATE INDEX idx_graph_edges_parent ON graph_edges(parent_id);
 CREATE INDEX idx_graph_edges_child ON graph_edges(child_id);
 CREATE INDEX idx_graph_edges_graph_id ON graph_edges(graph_id);
-
 ```
 
 Folder structure (Frontend):
@@ -338,6 +240,52 @@ The structure follows a clean architecture pattern with separated concerns acros
 
 Development principles:
 - write code with good error logging, using the frontend or backend's debug utility
+
+
+
+Frontend<>backend authentication pattern:
+
+1. Service Layer Pattern (like in graphService.ts):
+
+static async someApiCall() {
+    // 1. Get session token
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("No auth session");
+
+    // 2. Make authenticated request
+    const response = await fetch("/api/your/endpoint", {
+        method: "POST", // or GET, etc.
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(data), // if needed
+    });
+
+    // 3. Handle response
+    if (!response.ok) throw new Error("Request failed");
+    return await response.json();
+}
+
+2. Backend Pattern (like in content_map.py):
+
+@router.post("/your-endpoint")
+async def your_endpoint(data: YourModel, token: str = Depends(security)):
+    # token is automatically validated by the security dependency
+    # if invalid, FastAPI returns 403 Forbidden
+    user_id = get_user_id_from_token(token)  # if you need the user ID
+    # ... rest of your endpoint logic
+
+(note that main.py has to mount the router too)
+
+Key Points:
+- Always get a fresh session token using supabase.auth.getSession()
+- Include token in Authorization: Bearer ${token} header
+- Use FastAPI's security dependency in backend endpoints
+- Backend automatically returns 403 if token is invalid
+
 
 
 Demo goal:

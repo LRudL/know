@@ -219,6 +219,12 @@ function Dashboard() {
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <div className="flex gap-4">
           <button
+            onClick={() => router.push("/session")}
+            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent px-4 py-2"
+          >
+            Chat
+          </button>
+          <button
             onClick={() => router.push("/settings")}
             className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent px-4 py-2"
           >

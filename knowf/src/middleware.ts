@@ -37,11 +37,28 @@ export async function middleware(req: NextRequest) {
       headers.set("Authorization", `Bearer ${session.access_token}`);
     }
 
-    return NextResponse.rewrite(backendUrl, {
-      request: {
-        headers: headers,
-      },
-    });
+    return new NextResponse(
+      new ReadableStream({
+        async start(controller) {
+          const response = await fetch(backendUrl, { headers });
+          const reader = response.body?.getReader();
+          while (reader) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+          controller.close();
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      }
+    );
   }
 
   return NextResponse.next();
