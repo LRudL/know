@@ -33,7 +33,7 @@ In the frontend folder (knowf), run:
 npm install
 
 # Fill in your Supabase credentials in .env.local after running the following command
-cp .env.local.example .env.loca
+cp .env.local.example .env.local
 ```
 
 ## Running the project
