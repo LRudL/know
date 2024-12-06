@@ -139,15 +139,19 @@ async def process_content_map(document_id: str, graph_id: str, token: str):
         doc = get_document_content(document_id, client)
         user_id = get_user_id_from_token(token)
 
-        # Get the prompt once and pass it through
         user_prompt = await get_user_prompt(user_id)
-
-        # Pass the entire UserPrompt object
         nodes, edges = make_content_map(doc, user_prompt)
 
         # Insert nodes and edges
         nodes_data = [{**vars(node), "graph_id": graph_id} for node in nodes]
-        edges_data = [{**vars(edge), "graph_id": graph_id} for edge in edges]
+        edges_data = [
+            {
+                "parent_id": edge.parent_id,
+                "child_id": edge.child_id,
+                "graph_id": graph_id,
+            }
+            for edge in edges
+        ]
 
         nodes_result = client.from_("graph_nodes").insert(nodes_data).execute()
         check_data_and_cleanup_on_fail(client, graph_id, nodes_result, "nodes")
