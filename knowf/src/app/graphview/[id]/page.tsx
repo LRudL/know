@@ -22,12 +22,21 @@ import {
 } from "@/lib/graphService";
 import { MockDate } from "@/components/MockDate";
 import { MockReview } from "@/components/MockReview";
+import { LearningService, SpacedRepState } from "@/lib/learningService";
+import { dateService } from "@/lib/date";
+import { NodeReviewStateVisualization } from "@/components/NodeReviewStateVisualization";
 
 console.log("React version:", React.version);
 console.log("Node version:", process.version);
 
 const CustomNode = React.memo(
-  ({ data, selected }: { data: KnowledgeGraphNode; selected: boolean }) => {
+  ({
+    data,
+    selected,
+  }: {
+    data: KnowledgeGraphNode & { spaced_rep_state: SpacedRepState | null };
+    selected: boolean;
+  }) => {
     return (
       <div
         className={`bg-white p-1 rounded shadow border text-sm ${
@@ -44,6 +53,9 @@ const CustomNode = React.memo(
           {data.summary}{" "}
           <span className="text-gray-500">({data.order_index})</span>
         </p>
+        <NodeReviewStateVisualization
+          spaced_rep_state={data.spaced_rep_state}
+        />
         <MockReview nodeId={data.id} graphId={data.id} />
         <Handle
           type="source"
@@ -104,8 +116,8 @@ const getLayoutedElements = (
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({
     rankdir: direction,
-    nodesep: 30, // Reduce horizontal spacing between nodes
-    ranksep: 30, // Reduce vertical spacing between ranks
+    nodesep: 80,
+    ranksep: 100,
   });
 
   // Set nodes with smaller dimensions
@@ -162,8 +174,22 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
   // we CANNOT just use params.id because it's a Promise
   // do not change this OR the these comments
   // END UNDELETABLE COMMENTS
+
   const graphId = unwrappedParams.id;
-  const { data: graph, isLoading } = useGraph(graphId);
+  const { data: graph, isLoading: isLoadingGraph } = useGraph(graphId);
+
+  // Query for learning state
+  const {
+    data: learningState,
+    isLoading: isLoadingLearning,
+    refetch,
+  } = useQuery({
+    queryKey: ["learningState", graphId],
+    queryFn: () =>
+      LearningService.getGraphLearningState(graphId, dateService.now()),
+    enabled: !!graphId,
+  });
+
   const [selectedNode, setSelectedNode] =
     React.useState<KnowledgeGraphNode | null>(null);
 
@@ -171,7 +197,7 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
     return <div>Invalid graph ID</div>;
   }
 
-  if (isLoading) {
+  if (isLoadingGraph || isLoadingLearning) {
     return <div>Loading graph...</div>;
   }
 
@@ -179,33 +205,37 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
     return <div>Graph not found</div>;
   }
 
-  const elements = getLayoutedElements(graph.nodes, graph.edges);
+  // Merge graph nodes with learning state
+  const nodesWithState = graph.nodes.map((node) => {
+    let spaced_rep_state = null;
+
+    // Check each category in learning state
+    const inPast = learningState?.past.find((n) => n.node.id === node.id);
+    const inToReview = learningState?.to_review.find(
+      (n) => n.node.id === node.id
+    );
+    const inNotYetLearned = learningState?.not_yet_learned.find(
+      (n) => n.node.id === node.id
+    );
+
+    if (inPast) {
+      spaced_rep_state = inPast.spaced_rep_state;
+    } else if (inToReview) {
+      spaced_rep_state = inToReview.spaced_rep_state;
+    } else if (inNotYetLearned) {
+      spaced_rep_state = inNotYetLearned.spaced_rep_state;
+    }
+
+    return {
+      ...node,
+      spaced_rep_state,
+    };
+  });
+
+  const elements = getLayoutedElements(nodesWithState, graph.edges);
 
   const onNodeClick = (_event: React.MouseEvent, node: Node) => {
     setSelectedNode(node.data);
-  };
-
-  const handleRegenerateGraph = async () => {
-    try {
-      // Get the document ID for this graph
-      const documentId = await KnowledgeGraphService.getDocumentIdForGraph(
-        graphId
-      );
-      if (!documentId) {
-        throw new Error("Could not find document ID for this graph");
-      }
-
-      // Delete the current graph
-      await KnowledgeGraphService.deleteGraphById(graphId);
-
-      // Generate new graph and get the new ID
-      const newGraphId = await KnowledgeGraphService.generateGraph(documentId);
-
-      // Redirect to the new graph view
-      window.location.href = `/graphview/${newGraphId}`;
-    } catch (error) {
-      debug.error("Error regenerating graph:", error);
-    }
   };
 
   return (
@@ -240,10 +270,10 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
                 Back to Dashboard
               </Link>
               <button
-                onClick={handleRegenerateGraph}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition-colors"
+                onClick={() => refetch()}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
               >
-                Regenerate Map
+                Refresh Learning State
               </button>
               <MockDate />
             </div>

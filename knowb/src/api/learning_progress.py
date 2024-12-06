@@ -152,11 +152,7 @@ async def update_learning_progress(
         .update(
             {
                 "spaced_rep_state": new_spaced_rep_state.model_dump(),
-                "version": (
-                    1
-                    if current_progress.version is None
-                    else current_progress.version + 1
-                ),
+                "version": current_progress.version + 1,
             }
         )
         .eq("id", update.learning_progress_id)

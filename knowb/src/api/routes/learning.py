@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.services import get_supabase_client
 from src.services.security import security
 from src.api.models import (
-    LearningProgressUpdate,
+    LearningProgressUpdateRequest,
 )
 from src.api.learning_progress import (
     get_graph_learning_state,
@@ -29,7 +29,7 @@ async def get_graph_learning_state_route(
 
 @router.post("/learning_update")
 async def learning_update_route(
-    update: LearningProgressUpdate, token: str = Depends(security)
+    update: LearningProgressUpdateRequest, token: str = Depends(security)
 ):
     try:
         client = get_supabase_client(token)
