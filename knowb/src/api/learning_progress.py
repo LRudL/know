@@ -3,6 +3,7 @@ from typing import Optional
 from supabase import Client
 from fastapi import HTTPException
 from pydantic import BaseModel
+from src.api.spaced_repetition import apply_learning_update
 from src.api.models import (
     LearningProgress,
     LearningProgressUpdate,
@@ -10,39 +11,6 @@ from src.api.models import (
     SpacedRepState,
     ContentMapNode,
 )
-
-
-async def get_current_spaced_rep_state(
-    learning_progress_id: str, client: Client
-) -> SpacedRepState:
-    """Get the current spaced repetition state for a learning node"""
-    result = (
-        client.from_("learning_progress")
-        .select("spaced_rep_state")
-        .eq("id", learning_progress_id)
-        .execute()
-    )
-
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Learning node not found")
-
-    return result.data[0]["spaced_rep_state"]
-
-
-async def create_learning_progress_update_from_request(
-    request: LearningProgressUpdateRequest, client: Client
-) -> LearningProgressUpdate:
-    """Create a LearningProgressUpdate from a LearningProgressUpdateRequest (i.e. lookup the SpacedRepState)"""
-    current_state = await get_current_spaced_rep_state(
-        request.learning_progress_id, client
-    )
-    return LearningProgressUpdate(
-        learning_progress_id=request.learning_progress_id,
-        message_id=request.message_id,
-        created_at=request.created_at,
-        spaced_rep_state=current_state,
-        update_data=request.update_data,
-    )
 
 
 class NodeState(BaseModel):
@@ -102,21 +70,93 @@ async def get_graph_learning_state(
             # Next review is due (in the past or present)
             to_review.append(NodeState(node=node, spaced_rep_state=state))
 
+    # sort by node.order_index in each list
+    past.sort(key=lambda x: x.node.order_index)
+    to_review.sort(key=lambda x: x.node.order_index)
+    not_yet_learned.sort(key=lambda x: x.node.order_index)
+
     return GraphLearningState(
         past=past, to_review=to_review, not_yet_learned=not_yet_learned
     )
 
 
+async def learning_progress_update_from_request(
+    request: LearningProgressUpdateRequest, client: Client
+) -> LearningProgressUpdate:
+    # 1. Check if there exists a LearningProgress with that node_id
+    progress_result = (
+        client.from_("learning_progress")
+        .select("*")
+        .eq("node_id", request.node_id)
+        .execute()
+    )
+
+    if not progress_result.data:
+        # 1.1 Create new LearningProgress entry with default SpacedRepState
+        new_progress = {
+            "node_id": request.node_id,
+            "graph_id": request.graph_id,  # You'll need to pass this as a parameter
+            "user_id": request.user_id,  # You'll need to pass this as a parameter
+            "version": 1,
+            "spaced_rep_state": SpacedRepState().model_dump(),
+        }
+        progress_result = (
+            client.from_("learning_progress").insert(new_progress).execute()
+        )
+        if not progress_result.data:
+            raise HTTPException(
+                status_code=500, detail="Failed to create learning progress"
+            )
+        progress_id = progress_result.data[0]["id"]
+    else:
+        progress_id = progress_result.data[0]["id"]
+
+    # 2. Create LearningProgressUpdate
+    update = {
+        "learning_progress_id": progress_id,
+        "message_id": request.message_id,
+        "created_at": request.created_at,
+        "update_data": request.update_data.model_dump(),
+    }
+
+    # 3. Log LearningProgressUpdate to database
+    update_result = client.from_("learning_progress_updates").insert(update).execute()
+    if not update_result.data:
+        raise HTTPException(
+            status_code=500, detail="Failed to log learning progress update"
+        )
+
+    # 4. Return the update and the learning_progress
+    return LearningProgressUpdate.model_validate(
+        update_result.data[0]
+    ), LearningProgress.model_validate(progress_result.data[0])
+
+
 async def update_learning_progress(
-    update: LearningProgressUpdate, client: Client
+    request: LearningProgressUpdateRequest, client: Client
 ) -> dict:
-    """Update learning progress for a node"""
+    """Update learning progress for a node from a LearningProgressUpdate"""
+    # Get the LearningProgressUpdate and LearningProgress
+    update, current_progress = await learning_progress_update_from_request(
+        request, client
+    )
+
+    # Apply spaced repetition update
+    new_spaced_rep_state = apply_learning_update(
+        current_progress.spaced_rep_state, update.update_data, update.created_at
+    )
+
+    # Update the learning progress entry
     result = (
         client.from_("learning_progress")
         .update(
             {
-                "spaced_rep_state": update.spaced_rep_state,
-                "version": update.spaced_rep_state.version + 1,
+                "spaced_rep_state": new_spaced_rep_state.model_dump(),
+                "version": (
+                    1
+                    if current_progress.version is None
+                    else current_progress.version + 1
+                ),
             }
         )
         .eq("id", update.learning_progress_id)
@@ -129,14 +169,6 @@ async def update_learning_progress(
         )
 
     return {"status": "success"}
-
-
-async def update_learning_progress_from_request(
-    request: LearningProgressUpdateRequest, client: Client
-) -> dict:
-    """Update learning progress for a node from a LearningProgressUpdateRequest"""
-    update = await create_learning_progress_update_from_request(request, client)
-    return await update_learning_progress(update, client)
 
 
 async def delete_learning_progress(learning_node_id: str, client: Client) -> dict:

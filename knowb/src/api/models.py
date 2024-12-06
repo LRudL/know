@@ -50,17 +50,18 @@ class LearningProgressUpdateData(BaseModel):
     quality: REVIEW_QUALITY_LABEL
     notes: Optional[str] = None
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class SpacedRepState(BaseModel):
     next_review: Optional[datetime] = None
     last_review: Optional[datetime] = None
-    current_interval: float = Field(default=0)  # Days
+    current_interval: float = Field(default=0)
     ease_factor: float = Field(default=2.5)
     review_history: list[tuple[datetime, LearningProgressUpdateData]] = Field(
         default_factory=list
     )
 
-    # Add this to handle datetime strings from JSON
     model_config = ConfigDict(
         json_encoders={datetime: lambda v: v.isoformat()}, populate_by_name=True
     )
@@ -89,18 +90,26 @@ class LearningProgress(BaseModel):
 
 # this is what the learning_progress_updates table contains
 class LearningProgressUpdate(BaseModel):
-    learning_progress_id: str  # which node in the knowledge graph this is about
-    message_id: str  # which message in the chat triggered this learning update
-    created_at: datetime  # when this happened
-    spaced_rep_state: SpacedRepState
+    learning_progress_id: str
+    message_id: str | None = None
+    created_at: datetime
     update_data: LearningProgressUpdateData
 
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator("update_data", mode="before")
+    @classmethod
+    def parse_update_data(cls, value):
+        if isinstance(value, dict):
+            return LearningProgressUpdateData.model_validate(value)
+        return value
 
-# this is what the frontend actually sends; gets converted into the above by looking up SpacedRepState
+
+# This is what the AI + frontend sends to the backend
 class LearningProgressUpdateRequest(BaseModel):
-    learning_progress_id: str  # which node in the knowledge graph this is about
-    message_id: str  # which message in the chat triggered this learning update
-    created_at: datetime  # when this happened
+    node_id: str  # there might not exist a learning_progress_id for this node yet, so we don't have that
+    graph_id: str
+    user_id: str
+    message_id: str | None = None
+    created_at: datetime
     update_data: LearningProgressUpdateData

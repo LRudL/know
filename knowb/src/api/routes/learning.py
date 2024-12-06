@@ -3,11 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.services import get_supabase_client
 from src.services.security import security
 from src.api.models import (
-    LearningProgressUpdateRequest,
+    LearningProgressUpdate,
 )
 from src.api.learning_progress import (
     get_graph_learning_state,
-    update_learning_progress_from_request,
+    update_learning_progress,
     delete_learning_progress,
 )
 
@@ -29,11 +29,11 @@ async def get_graph_learning_state_route(
 
 @router.post("/learning_update")
 async def learning_update_route(
-    update: LearningProgressUpdateRequest, token: str = Depends(security)
+    update: LearningProgressUpdate, token: str = Depends(security)
 ):
     try:
         client = get_supabase_client(token)
-        return await update_learning_progress_from_request(update, client)
+        return await update_learning_progress(update, client)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail={"message": str(e), "type": type(e).__name__}

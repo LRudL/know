@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { dateService } from "../lib/date";
 
-const MockDate: React.FC = () => {
+export const MockDate: React.FC = () => {
   const [currentDate, setCurrentDate] = useState<Date>(dateService.now());
 
   useEffect(() => {

@@ -20,6 +20,8 @@ import {
   KnowledgeGraphEdge,
   KnowledgeGraphService,
 } from "@/lib/graphService";
+import { MockDate } from "@/components/MockDate";
+import { MockReview } from "@/components/MockReview";
 
 console.log("React version:", React.version);
 console.log("Node version:", process.version);
@@ -42,6 +44,7 @@ const CustomNode = React.memo(
           {data.summary}{" "}
           <span className="text-gray-500">({data.order_index})</span>
         </p>
+        <MockReview nodeId={data.id} graphId={data.id} />
         <Handle
           type="source"
           position={Position.Bottom}
@@ -242,6 +245,7 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
               >
                 Regenerate Map
               </button>
+              <MockDate />
             </div>
             <p className="text-sm text-gray-600 mt-2">Graph ID: {graphId}</p>
           </div>
