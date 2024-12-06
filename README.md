@@ -62,7 +62,6 @@ If you go to [http://localhost:8000/docs](http://localhost:8000/docs), you can p
 
 Then click on "Authorize" (green text button with padlock) in [http://localhost:8000/docs](http://localhost:8000/docs), and after this you should be able to try out the API endpoints. If you need to look up IDs of things, go to Supabase's Table Editor.
 
-
 ## Gotchas
 
 - are there errors in the browser console?

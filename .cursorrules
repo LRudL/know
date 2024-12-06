@@ -100,12 +100,11 @@ CREATE TABLE learning_progress (
     version integer NOT NULL DEFAULT 1,
     spaced_rep_state jsonb NOT NULL DEFAULT '{
         "next_review": null,
-        "ease_factor": 2.5,
-        "current_interval": 0,
-        "review_streak": 0,
         "last_review": null,
-        "last_quality": null
-    }',
+        "current_interval": 0.0,
+        "ease_factor": 2.5,
+        "review_history": []
+    }'::jsonb,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     UNIQUE(graph_id, node_id)
 );
@@ -132,8 +131,8 @@ CREATE TABLE learning_progress_updates (
     id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
     message_id uuid REFERENCES chat_messages NOT NULL,
     learning_progress_id uuid REFERENCES learning_progress NOT NULL,
-    learning_progress_version integer NOT NULL,
-    update_data jsonb NOT NULL, -- {concept_id, quality_rating, note}
+    learning_progress_version integer,
+    update_data jsonb NOT NULL, -- {quality: "failed" | "hard" | "good" | "easy", notes: [optional string]}
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

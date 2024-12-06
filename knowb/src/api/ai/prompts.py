@@ -1,6 +1,6 @@
 import json
 
-from src.api.structs import ContentMapEdge, ContentMapEdgePreID, ContentMapNode
+from src.api.models import ContentMapEdge, ContentMapEdgePreID, ContentMapNode
 
 
 BRAINSTORM_PROMPT = """

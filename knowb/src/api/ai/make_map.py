@@ -2,7 +2,7 @@ import base64
 from anthropic import Anthropic
 import os
 
-from src.api.structs import ContentMapEdge, ContentMapNode
+from src.api.models import ContentMapEdge, ContentMapNode
 from src.api.ai.prompts import parse_graph_output
 from src.users.user_settings import UserPrompt
 
