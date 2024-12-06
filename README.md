@@ -27,6 +27,8 @@ cp .env.example .env
 
 ### Frontend Setup
 
+In the frontend folder (knowf), run:
+
 ```bash
 npm install
 
@@ -61,6 +63,12 @@ If you go to [http://localhost:8000/docs](http://localhost:8000/docs), you can p
 <img width="488" alt="Screenshot 2024-12-05 at 20 57 34" src="https://github.com/user-attachments/assets/6fa52d6a-96f6-4efe-9a83-fb6dc543b531">
 
 Then click on "Authorize" (green text button with padlock) in [http://localhost:8000/docs](http://localhost:8000/docs), and after this you should be able to try out the API endpoints. If you need to look up IDs of things, go to Supabase's Table Editor.
+
+### Development settings
+
+Please use the Black formatter for Python code in the backend.
+
+Please use Prettier for TypeScript code in the frontend.
 
 ## Gotchas
 
