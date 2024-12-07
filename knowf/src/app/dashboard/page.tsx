@@ -1,137 +1,28 @@
 "use client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { debug } from "@/lib/debug";
 import { supabase } from "@/lib/supabase";
-import Link from "next/link";
-import { useDocumentGraph } from "@/hooks/useKnowledgeGraph";
+import { Document } from "@/lib/documentService";
+import { DocumentActions } from "@/components/DocumentActions";
 import {
   QueryClient,
   QueryClientProvider,
+  useQuery,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { usePromptName } from "@/hooks/usePromptName";
-import { useGetOrCreateSession } from "@/hooks/useSession";
 
 // Create a client
-const queryClient = new QueryClient();
-
-type Document = {
-  id: string;
-  title: string;
-  file_size: number;
-  storage_path: string;
-  user_id: string;
-  created_at: string;
-};
-
-function DocumentActions({ doc }: { doc: Document }) {
-  const queryClient = useQueryClient();
-  const {
-    graph,
-    generateGraph,
-    isGenerating,
-    deleteGraph,
-    isDeleting,
-    exists,
-  } = useDocumentGraph(doc.id);
-
-  const { data: promptName } = usePromptName(graph?.prompt_id ?? null);
-
-  const { mutate: deleteDocument, isPending: isDeletingDocument } = useMutation(
-    {
-      mutationFn: async () => {
-        // Delete from documents table
-        const { error: deleteError } = await supabase
-          .from("documents")
-          .delete()
-          .eq("id", doc.id);
-
-        if (deleteError) throw deleteError;
-
-        // Delete from storage
-        const { error: storageError } = await supabase.storage
-          .from("documents")
-          .remove([doc.storage_path]);
-
-        if (storageError) {
-          debug.error("Error deleting document from storage:", storageError);
-        }
-      },
-      onSuccess: () => {
-        // Invalidate the documents query to refresh the list
-        queryClient.invalidateQueries({ queryKey: ["documents"] });
-      },
-      onError: (error) => {
-        debug.error("Error deleting document:", error);
-      },
-    }
-  );
-
-  const router = useRouter();
-  const { mutate: startSession, isPending: isStartingSession } =
-    useGetOrCreateSession(doc.id);
-
-  const handleStartSession = () => {
-    startSession(undefined, {
-      onSuccess: (session) => {
-        router.push(`/session/${session.id}`);
-      },
-    });
-  };
-
-  return (
-    <td className="border border-gray-300 p-2">
-      <div className="flex gap-2">
-        {!exists ? (
-          <button
-            onClick={() => generateGraph()}
-            disabled={isGenerating}
-            className="bg-blue-500 text-white rounded px-4 py-2 disabled:bg-blue-300"
-          >
-            {isGenerating ? "Generating..." : "Generate Knowledge Map"}
-          </button>
-        ) : graph?.status === "processing" ? (
-          <div className="bg-yellow-500 text-white rounded px-4 py-2">
-            Processing Map...
-          </div>
-        ) : (
-          <>
-            <Link
-              href={`/graphview/${graph?.id}`}
-              className="bg-green-500 text-white rounded px-4 py-2"
-            >
-              View Map (from prompt: {promptName})
-            </Link>
-            <button
-              onClick={() => deleteGraph()}
-              disabled={isDeleting}
-              className="bg-red-500 text-white rounded px-4 py-2 disabled:bg-red-300"
-            >
-              {isDeleting ? "Deleting..." : "Delete Map"}
-            </button>
-          </>
-        )}
-        <button
-          onClick={() => deleteDocument()}
-          disabled={isDeletingDocument}
-          className="bg-red-700 text-white rounded px-4 py-2"
-        >
-          Delete Document
-        </button>
-        <button
-          onClick={handleStartSession}
-          disabled={isStartingSession}
-          className="bg-purple-500 text-white rounded px-4 py-2 disabled:bg-purple-300"
-        >
-          {isStartingSession ? "Starting..." : "Session"}
-        </button>
-      </div>
-    </td>
-  );
-}
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 0, // Consider all data stale immediately
+      refetchOnWindowFocus: true,
+    },
+  },
+});
 
 // Wrap the dashboard content
 export default function DashboardWrapper() {
@@ -142,32 +33,69 @@ export default function DashboardWrapper() {
   );
 }
 
+async function fetchDocuments(userId: string | undefined) {
+  if (!userId) return [];
+  const { data: documents, error } = await supabase
+    .from("documents")
+    .select("*")
+    .eq("user_id", userId);
+
+  if (error) {
+    debug.error("Error fetching documents:", error);
+    throw error;
+  }
+  return documents;
+}
+
 function Dashboard() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
-  const [documents, setDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
+  const queryClient = useQueryClient();
 
-  const fetchDocuments = useCallback(async () => {
-    const { data: documents, error } = await supabase
-      .from("documents")
-      .select("*")
-      .eq("user_id", user?.id);
+  const { data: documents = [] } = useQuery({
+    queryKey: ["documents", user?.id],
+    queryFn: () => fetchDocuments(user?.id),
+    enabled: !!user?.id,
+  });
 
-    if (error) {
-      debug.error("Error fetching documents:", error);
-    } else {
-      setDocuments(documents);
-    }
-  }, [user?.id]);
+  const { mutate: uploadDocument } = useMutation({
+    mutationFn: async (file: File) => {
+      const timestamp = new Date().getTime();
+      const fileName = `${timestamp}_${file.name}`;
+      const filePath = `${user?.id}/${fileName}`;
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login");
-    } else if (user) {
-      fetchDocuments();
-    }
-  }, [user, loading, router, fetchDocuments]);
+      const { data, error: uploadError } = await supabase.storage
+        .from("documents")
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { error: insertError } = await supabase.from("documents").insert([
+        {
+          user_id: user?.id,
+          title: file.name,
+          file_size: file.size,
+          storage_path: filePath,
+        },
+      ]);
+
+      if (insertError) {
+        // Cleanup the uploaded file if metadata insertion fails
+        await supabase.storage.from("documents").remove([filePath]);
+        throw insertError;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+    },
+    onError: (error) => {
+      debug.error("Upload process failed:", error);
+    },
+    onSettled: () => {
+      setUploading(false);
+    },
+  });
 
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -175,47 +103,8 @@ function Dashboard() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Add timestamp to filename to ensure uniqueness
-    const timestamp = new Date().getTime();
-    const fileName = `${timestamp}_${file.name}`;
-    const filePath = `${user?.id}/${fileName}`;
     setUploading(true);
-
-    try {
-      const { data, error: uploadError } = await supabase.storage
-        .from("documents")
-        .upload(filePath, file);
-
-      if (uploadError) {
-        debug.error("Error uploading file:", uploadError);
-        setUploading(false);
-        return;
-      }
-
-      debug.log("File uploaded successfully:", data);
-
-      const { error: insertError } = await supabase.from("documents").insert([
-        {
-          user_id: user?.id,
-          title: file.name, // Keep original filename as title
-          file_size: file.size,
-          storage_path: filePath,
-        },
-      ]);
-
-      if (insertError) {
-        debug.error("Error inserting document metadata:", insertError);
-        // Cleanup the uploaded file if metadata insertion fails
-        await supabase.storage.from("documents").remove([filePath]);
-      } else {
-        debug.log("Document metadata inserted successfully");
-        fetchDocuments();
-      }
-    } catch (error) {
-      debug.error("Upload process failed:", error);
-    } finally {
-      setUploading(false);
-    }
+    uploadDocument(file);
   };
 
   const handleSignOut = async () => {
@@ -285,8 +174,6 @@ function Dashboard() {
           </tbody>
         </table>
       </div>
-
-      {/* More dashboard content will go here */}
     </div>
   );
 }
