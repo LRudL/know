@@ -122,7 +122,7 @@ CREATE TABLE chat_messages (
     id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
     session_id uuid REFERENCES chat_sessions NOT NULL,
     is_ai boolean NOT NULL,
-    content text NOT NULL,
+    content jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

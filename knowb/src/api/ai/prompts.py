@@ -16,11 +16,20 @@ Reflect on the material in light of the above, develop your understanding of it,
 FINAL_PROMPT = """
 Now it is time to actually create the graph. The most important thing is that you should be thorough, concrete, and specific. Do not put down vague things. Always include some specific point, of the sort where if you saw it later in the context of giving a lesson, it would give you lots of points to grab onto, and information to spring from.
 
-Output a single line with "NODES", followed by a set of JSON-formatted nodes like the following example:
-{ "order_index": 1, "summary": "A brief title-like summary describing the main concept", "content": "Up to a few paragraphs or half a dozen bullet points that are the key things to understand about this concept. It is better to have too much than too little.", "supporting_quotes": [ "A quote that is verbatim from the material, supporting the content above", "Another quote that is verbatim from the material and supports the content, if there are non-contiguous ones. Feel free to have long quotes." ] }
-The "order_index" property should show in which order the concepts the nodes represent appear in the text. You should start at 1, and then increment by 1 for each following node.
-Then, output a single line saying "EDGES", followed by a set of JSON-formatted edges describing prerequisite relationships, as defined above, like the following example:
-{"parent_index": 1, "child_index": 2}
+Output a single line with "NODES", followed by a JSON list containing nodes. For example: 
+[
+    { "order_index": 1, "summary": "A brief title-like summary describing the main concept", "content": "Up to a few paragraphs or half a dozen bullet points that are the key things to understand about this concept. It is better to have too much than too little.", "supporting_quotes": [ "A quote that is verbatim from the material, supporting the content above", "Another quote that is verbatim from the material and supports the content, if there are non-contiguous ones. Feel free to have long quotes." ] },
+    { "order_index": 2, "summary": "Another example title", "content": "Some more bullet points on this concept", "supporting_quotes": [ "Feel free to include long quotes from the material." ] }
+]
+
+The "order_index" property should show in which order the concepts the nodes represent appear in the text. You should start at 1, and then increment by 1 for each following node, going in the order they appear in the text.
+
+Then, output a single line saying "EDGES", followed by a JSON list of edges describing prerequisite relationships, as defined above, in the following format:
+[
+    {"parent_index": 1, "child_index": 2},
+    {"parent_index": 1, "child_index": 2},
+    {"parent_index": 2, "child_index": 3}
+]
 where "parent_index" is the order_index of the parent, and the "child_index" is the order index of the child.
 
 If you need to finish some lines of thought, you can brainstorm at the start of your response. In particular, you want to be prepared to get specific and concrete, especially for each node's "content" field. But after that, output "NODES" on a single line, and after that your output must be entirely structured: list the nodes, output a blank line and then "EDGES", list the edges, and end. You should keep going as long as you need to, but every node and edge needs to be valid JSON.
@@ -30,39 +39,33 @@ If you need to finish some lines of thought, you can brainstorm at the start of 
 def parse_graph_output(
     output: str,
 ) -> tuple[list[ContentMapNode], list[ContentMapEdge]]:
-    nodes = []
-    edges_pre = []
+    # Split into nodes and edges sections
+    sections = output.split("EDGES")
+    if len(sections) != 2:
+        raise ValueError("Output must contain exactly one 'EDGES' delimiter")
 
-    lines = output.splitlines()
-    # Skip empty lines and only parse lines that look like JSON
-    node_start = next(i for i, line in enumerate(lines) if line.strip() == "NODES")
-    node_end = next(
-        i for i, line in enumerate(lines[node_start:]) if line.strip() == "EDGES"
-    )
+    # Find and parse the nodes JSON array
+    nodes_section = sections[0].split("NODES")[1].strip()
+    try:
+        nodes = [ContentMapNode(**node) for node in json.loads(nodes_section)]
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in nodes section: {e}")
 
-    for line in lines[
-        node_start + 1 : node_start + node_end
-    ]:  # Added +1 to skip "NODES" line
-        if line.strip() and line.strip().startswith("{"):  # Only parse JSON lines
-            nodes.append(ContentMapNode(**json.loads(line)))
+    # Parse the edges JSON array
+    edges_section = sections[1].strip()
+    try:
+        edges_pre = [ContentMapEdgePreID(**edge) for edge in json.loads(edges_section)]
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in edges section: {e}")
 
-    edge_start = next(i for i, line in enumerate(lines) if line.strip() == "EDGES")
-    for line in lines[edge_start + 1 :]:  # Added +1 to skip "EDGES" line
-        if line.strip() and line.strip().startswith("{"):  # Only parse JSON lines
-            edges_pre.append(ContentMapEdgePreID(**json.loads(line)))
-
-    # now, note that above we only have an order_index on nodes
-    # but when creating a ContentMapNode, the actual final ID is auto-generated
-    # so for the edges, we need to map the order_index to the actual ID
-
+    # Map order_index to actual IDs
     node_index_to_id = {node.order_index: node.id for node in nodes}
-    edges = []
-    for edge in edges_pre:
-        edges.append(
-            ContentMapEdge(
-                parent_id=node_index_to_id[edge.parent_index],
-                child_id=node_index_to_id[edge.child_index],
-            )
+    edges = [
+        ContentMapEdge(
+            parent_id=node_index_to_id[edge.parent_index],
+            child_id=node_index_to_id[edge.child_index],
         )
+        for edge in edges_pre
+    ]
 
     return nodes, edges
