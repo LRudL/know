@@ -105,8 +105,6 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           return;
         }
 
-        debug.log("Received chunk:", event.data);
-
         setMessages((prev) => {
           const newMessages = [...prev];
           const lastMessage = { ...newMessages[newMessages.length - 1] };

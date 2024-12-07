@@ -1,12 +1,11 @@
 import base64
-from datetime import datetime
 import json
 
-from fastapi import HTTPException
 from supabase import Client
 
+from src.api.data import session_id_to_document_id
+from src.api.graph import get_unlocked_nodes
 from src.api.pdf2text import convert_base64_pdf_to_text
-from src.api.learning_progress import get_graph_learning_state
 from src.api.routes.content_map import get_document_content
 from src.api.models import ContentMapEdge, ContentMapEdgePreID, ContentMapNode
 
@@ -44,21 +43,26 @@ You have judgement over which nodes should be addressed, and in what order. You 
 
 You should output tags indicating which nodes are currently being studied at the start of each of your responses. For instance <current_node>1</current_node> would indicate that node 1 is currently being studied. Once a node is complete, you should output <node_complete>1 judgement</node_complete> where judgement is one of "easy", "good", "hard" or "failed". For instance, if the learner struggled to understand a node, you might output <node_complete>1 hard</node_complete>, but if they understood it well, you might output <node_complete>1 good</node_complete>. 
 
-If a user struggles with a concept, you should move on after a few attempts. If they understand it well, you should move on to the next concept immediately.
+You should only submit one prompt for each node. Then move on immediately, marking the node as complete with a judgement of "easy", "good", "hard" or "failed". 
 
 Here is the document content:
 {document_content}
 
 Here are the nodes to address in this session. You don't need to address all of them. You should only try and address one node at a time.
 
-NODES TO REVIEW:
-{nodes_to_review}
+NODES TO ADDRESS:
+{nodes_to_address}
 
-NODES TO LEARN:
-{nodes_to_learn}
+Before starting, think about the best order to address the nodes, and come up with a plan of attack for this session. Use <thinking> tags to indicate your initial plan. Before each response, feel free to use <thinking> tags to change your plans. Remember, you should only submit one prompt for each node. Then move on immediately, marking the node as complete with a judgement of "easy", "good", "hard" or "failed".
+""".strip()
 
-Before starting, think about the best order to address the nodes, and come up with a plan of attack for this session. Use <plan>your plan</plan> to indicate your plan. Before each response, feel free to use <thinking> to change your plans.
+NODE_COMPLETE_PROMPT = """
+Nice, you finished a node! Here are some next nodes you can address. Choose the most appropriate one.
 
+NODES TO ADDRESS:
+{nodes_to_address}
+
+Remember, you should plan before you act in <thinking> tags. Also, make sure to output <current_node> tags to indicate which node you are currently addressing.
 """.strip()
 
 
@@ -116,34 +120,21 @@ def format_node_for_session_prompt(node: ContentMapNode) -> str:
 async def get_session_system_prompt(chat_session_id: str, client: Client):
     
     # Get document_id from chat_sessions table
-    session_result = client.from_("chat_sessions").select("document_id").eq("id", chat_session_id).single().execute()
-    if not session_result.data:
-        raise HTTPException(status_code=404, detail="Chat session not found")
-    document_id = session_result.data["document_id"]
-
+    document_id = session_id_to_document_id(chat_session_id, client)
+    
     # Get document content
     document_content = get_document_content(document_id, client)
     base64_document_content = base64.b64encode(document_content).decode("utf-8")
     string_document_content = convert_base64_pdf_to_text(base64_document_content)
-
-    # Get graph id
-    graph_result = (
-        client.from_("knowledge_graphs")
-        .select("id")
-        .eq("document_id", document_id)
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
-    )
-    if not graph_result.data:
-        raise HTTPException(status_code=404, detail="No knowledge graph found for document")
-    graph_id = graph_result.data[0]["id"]
-    # Get learning state
-    learning_state = await get_graph_learning_state(graph_id, datetime.now(), client)
-    nodes_to_review = [x.node for x in learning_state.to_review]
-    nodes_not_yet_learned = [x.node for x in learning_state.not_yet_learned]
     
-    formatted_nodes_to_review = "\n".join(format_node_for_session_prompt(node) for node in nodes_to_review)
-    formatted_nodes_not_yet_learned = "\n".join(format_node_for_session_prompt(node) for node in nodes_not_yet_learned)
+    # Get learning state
+    unlocked_nodes = await get_unlocked_nodes(chat_session_id, client)
+    
+    formatted_nodes_to_address = "\n".join(format_node_for_session_prompt(node) for node in unlocked_nodes)
 
-    return SESSION_SYSTEM_PROMPT.format(nodes_to_review=formatted_nodes_to_review, nodes_to_learn=formatted_nodes_not_yet_learned, document_content=string_document_content)
+    return SESSION_SYSTEM_PROMPT.format(nodes_to_address=formatted_nodes_to_address, document_content=string_document_content)
+
+
+def get_node_complete_prompt(nodes_to_address: list[ContentMapNode]) -> str:
+    formatted_nodes_to_address = "\n".join(format_node_for_session_prompt(node) for node in nodes_to_address)
+    return NODE_COMPLETE_PROMPT.format(nodes_to_address=formatted_nodes_to_address)

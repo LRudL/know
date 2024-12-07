@@ -70,6 +70,41 @@ function DocumentActions({ doc }: { doc: Document }) {
     }
   );
 
+  const { mutate: deleteLearningProgress, isPending: isDeletingProgress } = useMutation({
+    mutationFn: async () => {
+      if (!graph?.id) return;
+
+      // First get all learning progress records for this graph
+      const { data: progressRecords, error: progressError } = await supabase
+        .from("learning_progress")
+        .select("id")
+        .eq("graph_id", graph.id);
+
+      if (progressError) throw progressError;
+
+      // Delete all associated learning progress updates
+      for (const record of progressRecords || []) {
+        const { error: updateError } = await supabase
+          .from("learning_progress_updates")
+          .delete()
+          .eq("learning_progress_id", record.id);
+
+        if (updateError) throw updateError;
+      }
+
+      // Then delete the learning progress records
+      const { error } = await supabase
+        .from("learning_progress")
+        .delete()
+        .eq("graph_id", graph.id);
+
+      if (error) throw error;
+    },
+    onError: (error) => {
+      debug.error("Error deleting learning progress:", error);
+    }
+  });
+
   const router = useRouter();
   const { mutate: startSession, isPending: isStartingSession } =
     useGetOrCreateSession(doc.id);
@@ -111,6 +146,13 @@ function DocumentActions({ doc }: { doc: Document }) {
               className="bg-red-500 text-white rounded px-4 py-2 disabled:bg-red-300"
             >
               {isDeleting ? "Deleting..." : "Delete Map"}
+            </button>
+            <button
+              onClick={() => deleteLearningProgress()}
+              disabled={isDeletingProgress}
+              className="bg-orange-500 text-white rounded px-4 py-2 disabled:bg-orange-300"
+            >
+              {isDeletingProgress ? "Resetting..." : "Delete Progress"}
             </button>
           </>
         )}
