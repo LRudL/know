@@ -92,7 +92,9 @@ async def stream_chat(message: str, session_id: str, token: str = Depends(securi
                     timestamp = datetime.now().isoformat()
                     print(f"[{timestamp}] Sending chunk: {text}")
                     full_ai_response += text
-                    yield f"data: {text}\n\n"
+                    # Replace newlines with escaped newlines and escape any existing escaped newlines
+                    safe_text = text.replace("\n", "\\n").replace("\\n", "\\\\n")
+                    yield f"data: {safe_text}\n\n"
                     await asyncio.sleep(0.1)
 
                 # Update the AI message with complete response

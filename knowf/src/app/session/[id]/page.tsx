@@ -97,9 +97,6 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       };
 
       eventSource.onmessage = (event) => {
-        // debug.log("Raw event received:", event);
-        // debug.log("Event data:", event.data);
-
         if (event.data === "[END]") {
           debug.log("Received end of stream signal");
           eventSource.close();
@@ -108,10 +105,17 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           return;
         }
 
+        debug.log("Received chunk:", event.data);
+
         setMessages((prev) => {
           const newMessages = [...prev];
           const lastMessage = { ...newMessages[newMessages.length - 1] };
-          lastMessage.content = lastMessage.content + event.data;
+          try {
+            const unescapedData = JSON.parse(`"${event.data}"`);
+            lastMessage.content = lastMessage.content + unescapedData;
+          } catch {
+            lastMessage.content = lastMessage.content + event.data.replace(/\\/g, '');
+          }
           return [...newMessages.slice(0, -1), lastMessage];
         });
         scrollToBottom();
