@@ -56,7 +56,7 @@ class LearningProgressUpdateData(BaseModel):
 class SpacedRepState(BaseModel):
     next_review: Optional[datetime] = None
     last_review: Optional[datetime] = None
-    current_interval: float = Field(default=0)
+    current_interval: float = Field(default=1)
     ease_factor: float = Field(default=2.5)
     review_history: list[tuple[datetime, LearningProgressUpdateData]] = Field(
         default_factory=list
@@ -107,9 +107,9 @@ class LearningProgressUpdate(BaseModel):
 
 # This is what the AI + frontend sends to the backend
 class LearningProgressUpdateRequest(BaseModel):
-    node_id: str  # there might not exist a learning_progress_id for this node yet, so we don't have that
+    node_id: Optional[str] = None
     graph_id: str
-    user_id: str
-    message_id: str | None = None
+    user_id: Optional[str] = None  # this is set in the backend
+    message_id: Optional[str] = None
     created_at: datetime
     update_data: LearningProgressUpdateData

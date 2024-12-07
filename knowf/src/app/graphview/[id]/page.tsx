@@ -34,7 +34,10 @@ const CustomNode = React.memo(
     data,
     selected,
   }: {
-    data: KnowledgeGraphNode & { spaced_rep_state: SpacedRepState | null };
+    data: KnowledgeGraphNode & {
+      spaced_rep_state: SpacedRepState | null;
+      graphId: string;
+    };
     selected: boolean;
   }) => {
     return (
@@ -56,7 +59,7 @@ const CustomNode = React.memo(
         <NodeReviewStateVisualization
           spaced_rep_state={data.spaced_rep_state}
         />
-        <MockReview nodeId={data.id} graphId={data.id} />
+        <MockReview nodeId={data.id} graphId={data.graphId} />
         <Handle
           type="source"
           position={Position.Bottom}
@@ -75,11 +78,11 @@ const nodeTypes = {
 } as const;
 
 // First, let's type the transformation functions
-function toReactFlowNode(node: KnowledgeGraphNode): Node {
+function toReactFlowNode(node: KnowledgeGraphNode, graphId: string): Node {
   return {
     id: node.id,
     type: "custom",
-    data: node,
+    data: { ...node, graphId },
     position: { x: 0, y: 0 },
   };
 }
@@ -107,9 +110,12 @@ function toReactFlowEdge(edge: KnowledgeGraphEdge): Edge {
 const getLayoutedElements = (
   knowledgeNodes: KnowledgeGraphNode[],
   knowledgeEdges: KnowledgeGraphEdge[],
+  graphId: string,
   direction = "TB"
 ) => {
-  const nodes: Node[] = knowledgeNodes.map(toReactFlowNode);
+  const nodes: Node[] = knowledgeNodes.map((node) =>
+    toReactFlowNode(node, graphId)
+  );
   const edges: Edge[] = knowledgeEdges.map(toReactFlowEdge);
 
   const dagreGraph = new dagre.graphlib.Graph();
@@ -232,7 +238,11 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
     };
   });
 
-  const elements = getLayoutedElements(nodesWithState, graph.edges);
+  const elements = getLayoutedElements(
+    nodesWithState.map((node) => ({ ...node })),
+    graph.edges,
+    graphId
+  );
 
   const onNodeClick = (_event: React.MouseEvent, node: Node) => {
     setSelectedNode(node.data);

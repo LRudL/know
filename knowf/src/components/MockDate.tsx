@@ -15,13 +15,11 @@ export const MockDate: React.FC = () => {
   const addHours = (hours: number) => {
     const newDate = new Date(currentDate.getTime() + hours * 60 * 60 * 1000);
     dateService.setMockedDate(newDate);
-    setCurrentDate(newDate);
   };
 
   const addDays = (days: number) => {
     const newDate = dateService.addDays(days);
     dateService.setMockedDate(newDate);
-    setCurrentDate(newDate);
   };
 
   return (

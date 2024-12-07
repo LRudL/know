@@ -1,4 +1,5 @@
 import { debug } from "./debug";
+import { EventEmitter } from "events";
 
 // We have this class because we want to test the spaced repetition algorithm
 // i.e. simulate time travel into the future to see if it behaves correctly.
@@ -6,6 +7,7 @@ import { debug } from "./debug";
 export class DateService {
   private static instance: DateService;
   private mockedDate: Date | null = null;
+  private dateEmitter = new EventEmitter();
 
   private constructor() {}
 
@@ -28,6 +30,7 @@ export class DateService {
    */
   setMockedDate(date: Date | null) {
     this.mockedDate = date;
+    this.dateEmitter.emit("dateChange", date);
     debug.log("DateService: Mocked date set to", date?.toISOString() || "null");
   }
 
@@ -50,6 +53,14 @@ export class DateService {
   clearMockedDate() {
     this.mockedDate = null;
     debug.log("DateService: Cleared mocked date");
+  }
+
+  // Add subscription methods
+  subscribe(callback: (date: Date) => void): () => void {
+    this.dateEmitter.on("dateChange", callback);
+    return () => {
+      this.dateEmitter.off("dateChange", callback);
+    };
   }
 }
 

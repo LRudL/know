@@ -1,8 +1,8 @@
 import React from "react";
 import { dateService } from "../lib/date";
 import { debug } from "@/lib/debug";
-
-type ReviewQuality = "failed" | "hard" | "good" | "easy";
+import { LearningService } from "@/lib/learningService";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface MockReviewProps {
   nodeId: string;
@@ -10,11 +10,13 @@ interface MockReviewProps {
 }
 
 export const MockReview: React.FC<MockReviewProps> = ({ nodeId, graphId }) => {
-  const handleReview = (quality: ReviewQuality) => {
+  const queryClient = useQueryClient();
+
+  const handleReview = async (quality: "failed" | "hard" | "good" | "easy") => {
     const updateRequest = {
       node_id: nodeId,
       graph_id: graphId,
-      user_id: "TODO", // This is done on the backend based on the auth token.
+      user_id: "TODO", // This is ignored on backend as it uses the auth token
       message_id: null,
       created_at: dateService.now().toISOString(),
       update_data: {
@@ -23,7 +25,27 @@ export const MockReview: React.FC<MockReviewProps> = ({ nodeId, graphId }) => {
       },
     };
 
-    debug.log("Learning progress update:", updateRequest);
+    try {
+      await LearningService.updateLearningProgress(updateRequest);
+      // Invalidate and refetch the learning state
+      await queryClient.invalidateQueries({
+        queryKey: ["learningState", graphId],
+      });
+    } catch (error) {
+      debug.error("Failed to update learning progress:", error);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await LearningService.deleteLearningProgress(graphId, nodeId);
+      // Invalidate and refetch the learning state
+      await queryClient.invalidateQueries({
+        queryKey: ["learningState", graphId],
+      });
+    } catch (error) {
+      debug.error("Failed to delete learning progress:", error);
+    }
   };
 
   return (
@@ -51,6 +73,12 @@ export const MockReview: React.FC<MockReviewProps> = ({ nodeId, graphId }) => {
         className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
       >
         Easy
+      </button>
+      <button
+        onClick={handleDelete}
+        className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+      >
+        Reset
       </button>
     </div>
   );
