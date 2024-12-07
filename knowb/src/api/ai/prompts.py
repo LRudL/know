@@ -1,5 +1,13 @@
+import base64
+from datetime import datetime
 import json
 
+from fastapi import HTTPException
+from supabase import Client
+
+from src.api.pdf2text import convert_base64_pdf_to_text
+from src.api.learning_progress import get_graph_learning_state
+from src.api.routes.content_map import get_document_content
 from src.api.models import ContentMapEdge, ContentMapEdgePreID, ContentMapNode
 
 
@@ -24,6 +32,30 @@ Then, output a single line saying "EDGES", followed by a set of JSON-formatted e
 where "parent_index" is the order_index of the parent, and the "child_index" is the order index of the child.
 
 If you need to finish some lines of thought, you can brainstorm at the start of your response. In particular, you want to be prepared to get specific and concrete, especially for each node's "content" field. But after that, output "NODES" on a single line, and after that your output must be entirely structured: list the nodes, output a blank line and then "EDGES", list the edges, and end. You should keep going as long as you need to, but every node and edge needs to be valid JSON.
+""".strip()
+
+
+SESSION_SYSTEM_PROMPT = """
+You are a helpful socratic tutor guiding a learner through various concepts. You are given the ground truth pdf document that contains information about all concepts, and a list of "knowledge nodes" that the learner wants to learn about the document. You should ask questions to the user to help them learn the concepts, and give them feedback on their responses. Your questions should be clear, such that the answer is unambiguous. Imagine you are asking an Anki flashcard question. You should not mention the existence of nodes to the user.
+
+Each node is equipped with a summary, content and supporting quotes from the original document. You will be given a list of nodes that the learner has already learned at least once, that they should review. You will also be given a list of nodes that the learner has not yet learned, that they should learn.
+
+You have judgement over which nodes should be addressed, and in what order. You should try and ensure the reader understand the more basic concepts before progressing to the more complex ones. Your goal is to maximise the learner's understanding of the document. The learner can go on tangents, but you should try to keep them focused on the main concepts. 
+
+You should output tags indicating which nodes are currently being studied at the start of each of your responses. For instance <current_node>1</current_node> would indicate that node 1 is currently being studied. Once a node is complete, you should output <node_complete>1 judgement</node_complete> where judgement is one of "easy", "good", "hard" or "failed". For instance, if the learner struggled to understand a node, you might output <node_complete>1 hard</node_complete>, but if they understood it well, you might output <node_complete>1 good</node_complete>. 
+
+If a user struggles with a concept, you should move on after a few attempts. If they understand it well, you should move on to the next concept immediately.
+
+Here is the document content:
+{document_content}
+
+Here are the nodes to address in this session. You don't need to address all of them. You should only try and address one node at a time.
+
+NODES TO REVIEW:
+{nodes_to_review}
+
+NODES TO LEARN:
+{nodes_to_learn}
 """.strip()
 
 
@@ -66,3 +98,48 @@ def parse_graph_output(
         )
 
     return nodes, edges
+
+
+def format_node_for_session_prompt(node: ContentMapNode) -> str:
+    node_dict = {
+        "id": node.order_index,
+        "content": node.content,
+        "summary": node.summary,
+        "supporting_quotes": node.supporting_quotes,
+    }
+    return json.dumps(node_dict, indent=2)
+
+async def get_session_system_prompt(chat_session_id: str, client: Client):
+    
+    # Get document_id from chat_sessions table
+    session_result = client.from_("chat_sessions").select("document_id").eq("id", chat_session_id).single().execute()
+    if not session_result.data:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    document_id = session_result.data["document_id"]
+
+    # Get document content
+    document_content = get_document_content(document_id, client)
+    base64_document_content = base64.b64encode(document_content).decode("utf-8")
+    string_document_content = convert_base64_pdf_to_text(base64_document_content)
+
+    # Get graph id
+    graph_result = (
+        client.from_("knowledge_graphs")
+        .select("id")
+        .eq("document_id", document_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not graph_result.data:
+        raise HTTPException(status_code=404, detail="No knowledge graph found for document")
+    graph_id = graph_result.data[0]["id"]
+    # Get learning state
+    learning_state = await get_graph_learning_state(graph_id, datetime.now(), client)
+    nodes_to_review = [x.node for x in learning_state.to_review]
+    nodes_not_yet_learned = [x.node for x in learning_state.not_yet_learned]
+    
+    formatted_nodes_to_review = "\n".join(format_node_for_session_prompt(node) for node in nodes_to_review)
+    formatted_nodes_not_yet_learned = "\n".join(format_node_for_session_prompt(node) for node in nodes_not_yet_learned)
+
+    return SESSION_SYSTEM_PROMPT.format(nodes_to_review=formatted_nodes_to_review, nodes_to_learn=formatted_nodes_not_yet_learned, document_content=string_document_content)

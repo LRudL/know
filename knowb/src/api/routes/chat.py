@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -7,6 +8,7 @@ from pydantic import BaseModel
 from src.services.security import security
 from src.services import get_supabase_client
 import asyncio
+from src.api.ai.prompts import get_session_system_prompt
 
 router = APIRouter()
 
@@ -14,7 +16,6 @@ router = APIRouter()
 class ChatMessage(BaseModel):
     message: str
     session_id: str
-
 
 @router.get("/stream")
 async def stream_chat(message: str, session_id: str, token: str = Depends(security)):
@@ -32,7 +33,30 @@ async def stream_chat(message: str, session_id: str, token: str = Depends(securi
     if hasattr(history_response, "error") and history_response.error:
         raise HTTPException(status_code=500, detail="Failed to fetch chat history")
 
-    messages = [msg["content"] for msg in history_response.data]
+    system_prompt = await get_session_system_prompt(session_id, supabase)
+    system_message = {
+        "session_id": session_id,
+        "content": {
+            "role": "user", 
+            "content": [
+                # {
+                #     "type": "document",
+                #     "source": {
+                #         "type": "base64",
+                #         "media_type": "application/pdf",
+                #         "data": base64.b64encode(document_content).decode("utf-8")
+                #     }  
+                # },
+                {
+                    "type": "text",
+                    "text": system_prompt
+                }
+            ]
+        }
+    }
+    
+    messages = [system_message["content"]] + [msg["content"] for msg in history_response.data]
+    print(f"[DEBUG] Messages: {messages}")
 
     # Store user message
     user_message = {
@@ -58,10 +82,11 @@ async def stream_chat(message: str, session_id: str, token: str = Depends(securi
     async def generate():
         nonlocal full_ai_response
         try:
-            with client.messages.stream(
+            with client.beta.prompt_caching.messages.stream(
                 max_tokens=1024,
+                # betas=["pdfs-2024-09-25"],
                 messages=[*messages, {"role": "user", "content": message}],
-                model="claude-3-haiku-20240307",
+                model="claude-3-5-sonnet-20241022",
             ) as stream:
                 for text in stream.text_stream:
                     timestamp = datetime.now().isoformat()
