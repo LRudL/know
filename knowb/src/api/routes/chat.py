@@ -32,7 +32,19 @@ async def stream_chat(message: str, session_id: str, token: str = Depends(securi
     if hasattr(history_response, "error") and history_response.error:
         raise HTTPException(status_code=500, detail="Failed to fetch chat history")
 
-    messages = [msg["content"] for msg in history_response.data]
+    # Format messages correctly for Claude API
+    messages = []
+    for msg in history_response.data:
+        content = msg["content"]
+        if isinstance(content, dict) and "role" in content and "content" in content:
+            if content["content"]:  # Only add messages with non-empty content
+                messages.append({
+                    "role": content["role"],
+                    "content": content["content"]
+                })
+
+    # Add the current message
+    messages.append({"role": "user", "content": message})
 
     # Store user message
     user_message = {
