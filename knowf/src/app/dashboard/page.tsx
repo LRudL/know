@@ -13,6 +13,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { usePromptName } from "@/hooks/usePromptName";
+import { useGetOrCreateSession } from "@/hooks/useSession";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -69,6 +70,18 @@ function DocumentActions({ doc }: { doc: Document }) {
     }
   );
 
+  const router = useRouter();
+  const { mutate: startSession, isPending: isStartingSession } =
+    useGetOrCreateSession(doc.id);
+
+  const handleStartSession = () => {
+    startSession(undefined, {
+      onSuccess: (session) => {
+        router.push(`/session/${session.id}`);
+      },
+    });
+  };
+
   return (
     <td className="border border-gray-300 p-2">
       <div className="flex gap-2">
@@ -107,6 +120,13 @@ function DocumentActions({ doc }: { doc: Document }) {
           className="bg-red-700 text-white rounded px-4 py-2"
         >
           Delete Document
+        </button>
+        <button
+          onClick={handleStartSession}
+          disabled={isStartingSession}
+          className="bg-purple-500 text-white rounded px-4 py-2 disabled:bg-purple-300"
+        >
+          {isStartingSession ? "Starting..." : "Session"}
         </button>
       </div>
     </td>

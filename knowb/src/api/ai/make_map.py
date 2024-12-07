@@ -59,7 +59,7 @@ def make_content_map(
     final_response = client.beta.messages.create(
         model="claude-3-5-sonnet-20240620",
         betas=["pdfs-2024-09-25"],
-        max_tokens=4096,
+        max_tokens=8192,
         messages=[
             {
                 "role": "user",

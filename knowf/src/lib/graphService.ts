@@ -79,8 +79,6 @@ export class KnowledgeGraphService {
     documentId: string
   ): Promise<KnowledgeGraph | null> {
     try {
-      debug.log("[Poll] Checking graph status for document:", documentId);
-
       const { data: graphs, error: graphError } = await supabase
         .from("knowledge_graphs")
         .select("*")
@@ -89,8 +87,6 @@ export class KnowledgeGraphService {
 
       if (graphError) throw graphError;
       if (!graphs) return null;
-
-      debug.log("[Poll] Current graph status:", graphs.status);
 
       if (graphs.status === "processing") {
         return this.createEmptyGraph(
