@@ -9,6 +9,8 @@ import { useSession } from "@/hooks/useSession";
 import { SessionService, ChatMessageContent } from "@/lib/sessionService";
 import QueryProvider from "@/providers/query-provider";
 import React from "react";
+import { TTSStreamer } from '@/components/ttsstreamer';
+import { AudioPlayer } from "@/components/audioplayer";
 
 export default function ChatSessionWrapper({
   params,
@@ -37,6 +39,8 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const eventSourceRef = useRef<EventSourcePolyfill | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [ttsText, setTTSText] = useState<string>('');
+  const [isTTSEnabled, setIsTTSEnabled] = useState(true);
 
   useEffect(() => {
     async function loadMessages() {
@@ -97,9 +101,6 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       };
 
       eventSource.onmessage = (event) => {
-        // debug.log("Raw event received:", event);
-        // debug.log("Event data:", event.data);
-
         if (event.data === "[END]") {
           debug.log("Received end of stream signal");
           eventSource.close();
@@ -114,6 +115,11 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           lastMessage.content = lastMessage.content + event.data;
           return [...newMessages.slice(0, -1), lastMessage];
         });
+        
+        if (isTTSEnabled) {
+          setTTSText(event.data);
+        }
+        
         scrollToBottom();
       };
 
@@ -169,6 +175,12 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           >
             Clear History
           </button>
+          <button
+            onClick={() => setIsTTSEnabled(!isTTSEnabled)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
+          >
+            {isTTSEnabled ? '🔊 Mute TTS' : '🔈 Unmute TTS'}
+          </button>
         </div>
         <p className="text-sm text-gray-500">Session ID: {sessionId}</p>
       </div>
@@ -210,6 +222,8 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           </button>
         </div>
       </div>
+
+      {isTTSEnabled && <AudioPlayer text={ttsText} />}
     </div>
   );
 }
