@@ -13,6 +13,15 @@ import React from "react";
 import { TTSStreamer } from "@/components/ttsstreamer";
 import { AudioPlayer } from "@/components/audioplayer";
 import { SpeechInput } from "@/components/SpeechInput";
+import {
+  ChatMessage,
+  ChatMessageManager,
+  ChatMessageProps,
+} from "@/components/ChatMessage";
+import {
+  RenderLevelProvider,
+  RenderLevelSelector,
+} from "@/components/ChatMessageRenderLevel";
 
 export default function ChatSessionWrapper({
   params,
@@ -21,7 +30,9 @@ export default function ChatSessionWrapper({
 }) {
   return (
     <QueryProvider>
-      <ChatSession params={params} />
+      <RenderLevelProvider>
+        <ChatSession params={params} />
+      </RenderLevelProvider>
     </QueryProvider>
   );
 }
@@ -36,21 +47,32 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
 
   const sessionId = unwrappedParams.id;
   const { data: session, isLoading } = useSession(sessionId);
-  const [messages, setMessages] = useState<ChatMessageContent[]>([]);
+  const [messages, setMessages] = useState<ChatMessageProps[]>([]);
   const [inputText, setInputText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const eventSourceRef = useRef<EventSourcePolyfill | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [ttsText, setTTSText] = useState<string>("");
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
-  const [isSpeechEnabled, setIsSpeechEnabled] = useState(false);
+  const [isSpeechEnabled, setIsSpeechEnabled] = useState(true);
 
   useEffect(() => {
     async function loadMessages() {
       const sessionMessages = await SessionService.getSessionMessages(
         sessionId
       );
-      setMessages(sessionMessages.map((msg) => msg.content));
+      setMessages(
+        sessionMessages.map((msg) => ({
+          role: msg.content.role,
+          content: msg.content.content,
+          isLatest: false,
+        }))
+      );
+
+      // Auto-send initial message if no messages exist
+      if (sessionMessages.length === 0) {
+        sendMessage("I'm ready to get started.");
+      }
     }
     loadMessages();
   }, [sessionId]);
@@ -68,8 +90,8 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const sendMessage = async () => {
-    if (!inputText.trim()) return;
+  const sendMessage = async (messageText: string = inputText) => {
+    if (!messageText.trim()) return;
 
     const {
       data: { session },
@@ -77,22 +99,35 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
     if (!session?.access_token) throw new Error("No auth session");
 
     debug.log("Starting new message stream");
-    const userMessage: ChatMessageContent = {
-      role: "user",
-      content: inputText.trim(),
-    };
 
-    setMessages((prev) => [...prev, userMessage]);
+    // Add user message
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: messageText.trim(),
+        isLatest: false,
+      },
+    ]);
+
     setInputText("");
     setIsStreaming(true);
 
-    let isFirstChunk = true;
+    // Add initial AI message
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: "",
+        isLatest: true,
+      },
+    ]);
 
     try {
       debug.log("Creating EventSource connection");
       const eventSource = new EventSourcePolyfill(
         `/api/chat/stream?message=${encodeURIComponent(
-          inputText.trim()
+          messageText.trim()
         )}&session_id=${sessionId}`,
         {
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -100,13 +135,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       );
       eventSourceRef.current = eventSource;
 
-      eventSource.onopen = () => {
-        debug.log("EventSource connection opened");
-      };
-
       eventSource.onmessage = (event) => {
-        debug.log("Received message:", event.data);
-
         if (event.data === "[END]") {
           debug.log("Received end of stream signal");
           eventSource.close();
@@ -118,10 +147,11 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
         if (event.data.startsWith("Error:")) {
           debug.error("Received error from stream:", event.data);
           setMessages((prev) => [
-            ...prev,
+            ...prev.slice(0, -1),
             {
               role: "assistant",
               content: "Sorry, an error occurred. Please try again.",
+              isLatest: true,
             },
           ]);
           eventSource.close();
@@ -130,24 +160,9 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           return;
         }
 
-        if (isFirstChunk) {
-          isFirstChunk = false;
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content: String(event.data),
-            },
-          ]);
-        } else {
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            const lastMessage = { ...newMessages[newMessages.length - 1] };
-            lastMessage.content =
-              String(lastMessage.content) + String(event.data);
-            return [...newMessages.slice(0, -1), lastMessage];
-          });
-        }
+        setMessages((prev) =>
+          ChatMessageManager.updateLatestMessage(prev, event.data)
+        );
 
         if (isTTSEnabled && event.data.trim()) {
           setTTSText(event.data);
@@ -166,6 +181,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           {
             role: "assistant",
             content: "Sorry, an error occurred. Please try again.",
+            isLatest: true,
           },
         ]);
       };
@@ -177,6 +193,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
         {
           role: "assistant",
           content: "Sorry, an error occurred. Please try again.",
+          isLatest: true,
         },
       ]);
     }
@@ -223,6 +240,9 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           >
             {isSpeechEnabled ? "🎤 Disable Voice" : "🎤 Enable Voice"}
           </button>
+          <div className="ml-auto">
+            <RenderLevelSelector />
+          </div>
         </div>
         <p className="text-sm text-gray-500">Session ID: {sessionId}</p>
       </div>
@@ -230,23 +250,17 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       <div className="flex-1 flex flex-col p-4">
         <div className="flex-1 overflow-y-auto mb-4 space-y-4">
           {messages.map((message, index) => (
-            <div
-              key={index}
-              className={`p-4 rounded-lg ${
-                message.role === "user"
-                  ? "bg-blue-100 ml-auto max-w-[80%]"
-                  : "bg-gray-100 mr-auto max-w-[80%]"
-              }`}
-            >
-              {typeof message.content === "string"
-                ? message.content
-                : JSON.stringify(message.content)}
+            <div key={`message-${index}`}>
+              {ChatMessageManager.renderMessage({
+                ...message,
+                isLatest: index === messages.length - 1,
+              })}
             </div>
           ))}
           <div ref={messagesEndRef} />
         </div>
         <div className="flex gap-2 p-4 border-t">
-          <div className="flex-1 flex gap-2">
+          <div className="flex-1">
             <input
               type="text"
               value={inputText}
@@ -254,24 +268,24 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
               onKeyPress={(e) =>
                 e.key === "Enter" && !isStreaming && sendMessage()
               }
-              className="flex-1 p-2 border rounded"
+              className="w-full p-2 border rounded"
               placeholder="Type your message..."
               disabled={isStreaming}
             />
-
-            {isSpeechEnabled && (
-              <SpeechInput
-                onTranscript={(text) => {
-                  setInputText(text);
-                }}
-                sessionId={sessionId}
-                className="flex-shrink-0"
-              />
-            )}
           </div>
 
+          {isSpeechEnabled && (
+            <SpeechInput
+              onTranscript={(text) => {
+                setInputText(text);
+              }}
+              sessionId={sessionId}
+              className="flex-shrink-0"
+            />
+          )}
+
           <button
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={isStreaming || !inputText.trim()}
             className="p-2 bg-blue-500 text-white rounded disabled:bg-blue-300"
           >
