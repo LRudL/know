@@ -234,9 +234,8 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       align="start"
     >
       <Header back={true}/>
-      <div className="p-4">
+      <div className="px-10 py-5">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold">Chat Session</h1>
           <button
             onClick={clearHistory}
             className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded text-sm transition-colors"
