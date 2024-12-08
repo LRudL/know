@@ -39,7 +39,7 @@ const renderThinkingText = (text: string) => {
   let isThinking = false;
 
   return (
-    <div className="whitespace-pre-wrap">
+    <div style={{ whiteSpace: "pre-wrap" }}>
       {parts.map((part, index) => {
         if (part === "<thinking>") {
           isThinking = true;
@@ -58,7 +58,11 @@ const renderThinkingText = (text: string) => {
           );
         }
         return part ? (
-          <span key={index} className={isThinking ? "text-red-500" : ""}>
+          <span
+            key={index}
+            className={isThinking ? "text-red-500" : ""}
+            style={{ whiteSpace: "pre-wrap" }}
+          >
             {part}
           </span>
         ) : null;
@@ -154,13 +158,39 @@ export class ChatMessageManager {
     const newMessages = [...messages];
     const lastMessage = { ...newMessages[newMessages.length - 1] };
 
-    if (typeof lastMessage.content === "string") {
-      // Just append the new content without adding closing tags
-      lastMessage.content = lastMessage.content + newContent;
-      return [...newMessages.slice(0, -1), lastMessage];
+    let processedContent = newContent;
+    try {
+      processedContent = JSON.parse(`"${newContent}"`);
+    } catch {
+      if (newContent.includes("\\")) {
+        debug.warn("Failed to parse streamed data, using raw:", newContent);
+      }
+      processedContent = newContent;
     }
 
-    debug.warn("Attempted to update non-string content");
-    return messages;
+    if (typeof lastMessage.content === "object") {
+      if (
+        "type" in lastMessage.content &&
+        lastMessage.content.type === "text"
+      ) {
+        lastMessage.content = {
+          type: "text",
+          text: lastMessage.content.text + processedContent,
+        };
+      } else {
+        debug.warn("Unexpected content structure:", lastMessage.content);
+        return messages;
+      }
+    } else if (typeof lastMessage.content === "string") {
+      lastMessage.content = {
+        type: "text",
+        text: lastMessage.content + processedContent,
+      };
+    } else {
+      debug.warn("Unexpected content type:", typeof lastMessage.content);
+      return messages;
+    }
+
+    return [...newMessages.slice(0, -1), lastMessage];
   }
 }
