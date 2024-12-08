@@ -3,6 +3,7 @@ import { dateService } from "../lib/date";
 import { debug } from "@/lib/debug";
 import { LearningService } from "@/lib/learningService";
 import { useQueryClient } from "@tanstack/react-query";
+import { Flex, Text } from "@radix-ui/themes";
 
 interface MockReviewProps {
   nodeId: string;
@@ -49,37 +50,40 @@ export const MockReview: React.FC<MockReviewProps> = ({ nodeId, graphId }) => {
   };
 
   return (
-    <div className="flex gap-1 mt-1">
-      <button
-        onClick={() => handleReview("failed")}
-        className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-      >
-        Failed
-      </button>
-      <button
-        onClick={() => handleReview("hard")}
-        className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600"
-      >
-        Hard
-      </button>
-      <button
-        onClick={() => handleReview("good")}
-        className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
-      >
-        Good
-      </button>
-      <button
-        onClick={() => handleReview("easy")}
-        className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
-      >
-        Easy
-      </button>
-      <button
-        onClick={handleDelete}
-        className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
-      >
-        Reset
-      </button>
-    </div>
+    <Flex direction="column" gap="1" className="mt-4">
+      <Text size="1" color="gray">Mock Learning</Text>
+      <div className="flex gap-1">
+        <button
+          onClick={() => handleReview("failed")}
+          className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+        >
+          Failed
+        </button>
+        <button
+          onClick={() => handleReview("hard")}
+          className="px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
+        >
+          Hard
+        </button>
+        <button
+          onClick={() => handleReview("good")}
+          className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+        >
+          Good
+        </button>
+        <button
+          onClick={() => handleReview("easy")}
+          className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+        >
+          Easy
+        </button>
+        <button
+          onClick={handleDelete}
+          className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+        >
+          Reset
+        </button>
+      </div>
+    </Flex>
   );
 };

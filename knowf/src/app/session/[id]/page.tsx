@@ -10,7 +10,6 @@ import { useSession } from "@/hooks/useSession";
 import { SessionService, ChatMessageContent } from "@/lib/sessionService";
 import QueryProvider from "@/providers/query-provider";
 import React from "react";
-import { TTSStreamer } from "@/components/ttsstreamer";
 import { AudioPlayer } from "@/components/audioplayer";
 import { SpeechInput } from "@/components/SpeechInput";
 import {
@@ -276,19 +275,64 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
     }
   };
 
+  // Add this new component for the circular record button
+  function CircularRecordButton({
+    onTranscript,
+    sessionId,
+  }: {
+    onTranscript: (text: string) => void;
+    sessionId: string;
+  }) {
+    const [isRecording, setIsRecording] = useState(false);
+
+    const handleTranscript = (text: string) => {
+      setIsRecording(false);
+      onTranscript(text);
+      sendMessage(text);
+    };
+
+    const baseStyle = {
+      borderRadius: "50%",
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer",
+      background: "none",
+    };
+
+    return (
+      <div className="flex items-center justify-center w-full h-full">
+        <SpeechInput
+          onTranscript={handleTranscript}
+          sessionId={sessionId}
+          className={`w-[300px] h-[300px] rounded-full transition-colors flex items-center justify-center text-white text-4xl font-bold cursor-pointer ${
+            isRecording
+              ? "bg-red-500 hover:bg-red-600"
+              : "bg-blue-500 hover:bg-blue-600"
+          }`}
+          buttonStyle={baseStyle}
+          buttonText={isRecording ? "Click to Send" : "Click to Speak"}
+          isRecording={isRecording}
+          onRecordingStateChange={setIsRecording}
+        />
+      </div>
+    );
+  }
+
   return (
-    <Flex 
-      className="dashboard-background" 
-      style={{  
-        backgroundColor: "var(--color-background)"
-      }} 
-      display="flex" 
-      width="100vw" 
-      height="100vh"
+    <Flex
+      className="dashboard-background"
+      style={{
+        backgroundColor: "var(--color-background)",
+        height: "100vh", // Full viewport height
+        overflow: "hidden", // Prevent page-level scroll
+      }}
+      display="flex"
       direction="column"
-      align="start"
     >
-      <Header back={true}/>
+      <Header back={true} />
       <div className="px-10 py-5">
         <div className="flex items-center gap-4">
           <button
@@ -314,51 +358,59 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           </div>
         </div>
       </div>
-      <Separator orientation="horizontal" size="4"/>
-      <div style={{overflowY: "auto", width: "100%"}} className="flex-1 flex flex-col p-4" >
-        <div className="flex-1 overflow-y-auto mb-4 space-y-4">
-          {messages.map((message, index) => (
-            <div key={`message-${index}`}>
-              {ChatMessageManager.renderMessage({
-                ...message,
-                isLatest: index === messages.length - 1,
-              })}
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-        <div className="flex gap-2 p-4 border-t">
-          <div className="flex-1">
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyPress={(e) =>
-                e.key === "Enter" && !isStreaming && sendMessage()
-              }
-              className="w-full p-2 border rounded"
-              placeholder="Type your message..."
-              disabled={isStreaming}
-            />
-          </div>
+      <Separator orientation="horizontal" size="4" />
 
+      {/* Main content area */}
+      <div className="flex flex-1" style={{ overflow: "hidden" }}>
+        {/* Left side - Chat with scrolling */}
+        <div className="w-1/2 flex flex-col">
+          <div className="flex-1 overflow-y-auto p-4">
+            {/* Messages container */}
+            <div className="space-y-4">
+              {messages.map((message, index) => (
+                <div key={`message-${index}`}>
+                  {ChatMessageManager.renderMessage({
+                    ...message,
+                    isLatest: index === messages.length - 1,
+                  })}
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
+          {/* Input area fixed at bottom */}
+          <div className="flex gap-2 p-4 border-t">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyPress={(e) =>
+                  e.key === "Enter" && !isStreaming && sendMessage()
+                }
+                className="w-full p-2 border rounded"
+                placeholder="Type your message..."
+                disabled={isStreaming}
+              />
+            </div>
+            <button
+              onClick={() => sendMessage()}
+              disabled={isStreaming || !inputText.trim()}
+              className="p-2 bg-blue-500 text-white rounded disabled:bg-blue-300"
+            >
+              {isStreaming ? "Sending..." : "Send"}
+            </button>
+          </div>
+        </div>
+
+        {/* Right side - Record button (no scroll) */}
+        <div className="w-1/2 flex items-center justify-center border-l">
           {isSpeechEnabled && (
-            <SpeechInput
-              onTranscript={(text) => {
-                setInputText(text);
-              }}
+            <CircularRecordButton
+              onTranscript={(text) => setInputText(text)}
               sessionId={sessionId}
-              className="flex-shrink-0"
             />
           )}
-
-          <button
-            onClick={() => sendMessage()}
-            disabled={isStreaming || !inputText.trim()}
-            className="p-2 bg-blue-500 text-white rounded disabled:bg-blue-300"
-          >
-            {isStreaming ? "Sending..." : "Send"}
-          </button>
         </div>
       </div>
 

@@ -45,7 +45,7 @@ const CustomNode = React.memo(
   }) => {
     return (
       <div
-        className={`bg-white p-1 rounded shadow border text-sm ${
+        className={`bg-white p-2 rounded shadow border ${
           selected ? "ring-2 ring-blue-500" : ""
         }`}
       >
@@ -55,10 +55,10 @@ const CustomNode = React.memo(
           id={`${data.id}-target`}
           style={{ top: -5, opacity: 0 }}
         />
-        <p className="font-medium text-xs">
-          {data.summary}{" "}
-          <span className="text-gray-500">({data.order_index})</span>
-        </p>
+        <div className="mb-2">
+          <div className="text-gray-500 text-xs">Node {data.order_index}</div>
+          <div className="font-medium text-sm leading-tight">{data.summary}</div>
+        </div>
         <NodeReviewStateVisualization
           spaced_rep_state={data.spaced_rep_state}
         />
@@ -129,9 +129,9 @@ const getLayoutedElements = (
     ranksep: 100,
   });
 
-  // Set nodes with smaller dimensions
+  // Set nodes with more realistic dimensions
   nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: 150, height: 30 });
+    dagreGraph.setNode(node.id, { width: 200, height: 100 });
   });
 
   // Set edges
@@ -142,14 +142,14 @@ const getLayoutedElements = (
   // Calculate layout
   dagre.layout(dagreGraph);
 
-  // Get positioned nodes
+  // Adjust position calculation for new dimensions
   const positionedNodes = nodes.map((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
     return {
       ...node,
       position: {
-        x: nodeWithPosition.x - 75, // Half of new width
-        y: nodeWithPosition.y - 15, // Half of new height
+        x: nodeWithPosition.x - 100,
+        y: nodeWithPosition.y - 50,
       },
     };
   });
@@ -264,38 +264,40 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
       align="start"
     >
       <Header back={true}/>
-      <ReactFlow
-        nodes={elements.nodes}
-        edges={elements.edges}
-        nodeTypes={nodeTypes}
-        connectionMode={ConnectionMode.Loose}
-        onNodeClick={onNodeClick}
-        defaultEdgeOptions={{
-          type: "default",
-          animated: false,
-          style: { strokeWidth: 2 },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            width: 20,
-            height: 20,
-            color: "#374151",
-          },
-        }}
-        fitView
-      >
-        <Panel position="top-left">
-          <div className="bg-white p-4 rounded shadow">
-            <div className="flex items-center gap-4">
-              <MockDate />
-            </div>
-          </div>
-        </Panel>
-      </ReactFlow>
+      <div style={{ display: 'flex', width: '100%', height: 'calc(100vh - 60px)' }}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <ReactFlow
+            nodes={elements.nodes}
+            edges={elements.edges}
+            nodeTypes={nodeTypes}
+            connectionMode={ConnectionMode.Loose}
+            onNodeClick={onNodeClick}
+            defaultEdgeOptions={{
+              type: "default",
+              animated: false,
+              style: { strokeWidth: 2 },
+              markerEnd: {
+                type: MarkerType.ArrowClosed,
+                width: 20,
+                height: 20,
+                color: "#374151",
+              },
+            }}
+            fitView
+          >
+            <Panel position="top-left">
+              <div className="bg-white p-4 rounded shadow">
+                <div className="flex items-center gap-4">
+                  <MockDate />
+                </div>
+              </div>
+            </Panel>
+          </ReactFlow>
+        </div>
 
-      {/* Info Panel */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t shadow-lg">
-        <div className="max-h-[300px] overflow-y-auto p-4">
-          <div className="max-w-4xl mx-auto">
+        {/* Right-side Info Panel */}
+        <div className="w-[450px] border-l shadow-lg bg-white overflow-y-auto">
+          <div className="p-4">
             {selectedNode ? (
               <div className="space-y-3">
                 <div>
