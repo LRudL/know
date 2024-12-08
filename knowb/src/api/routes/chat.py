@@ -18,85 +18,104 @@ class ChatMessage(BaseModel):
 
 @router.get("/stream")
 async def stream_chat(message: str, session_id: str, token: str = Depends(security)):
+    print(f"[Chat] Received message request - Session: {session_id}")
+    print(f"[Chat] Message content: {message[:50]}...")  # First 50 chars for privacy
+    
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     supabase = get_supabase_client()
 
-    # Get chat history
-    history_response = (
-        supabase.table("chat_messages")
-        .select("content")
-        .eq("session_id", session_id)
-        .order("created_at")
-        .execute()
-    )
-    if hasattr(history_response, "error") and history_response.error:
-        raise HTTPException(status_code=500, detail="Failed to fetch chat history")
+    try:
+        # Get chat history
+        print(f"[Chat] Fetching chat history for session: {session_id}")
+        history_response = (
+            supabase.table("chat_messages")
+            .select("content")
+            .eq("session_id", session_id)
+            .order("created_at")
+            .execute()
+        )
+        if hasattr(history_response, "error") and history_response.error:
+            print(f"[Chat] Error fetching history: {history_response.error}")
+            raise HTTPException(status_code=500, detail="Failed to fetch chat history")
 
-    # Format messages correctly for Claude API
-    messages = []
-    for msg in history_response.data:
-        content = msg["content"]
-        if isinstance(content, dict) and "role" in content and "content" in content:
-            if content["content"]:  # Only add messages with non-empty content
-                messages.append({
-                    "role": content["role"],
-                    "content": content["content"]
-                })
+        print(f"[Chat] Found {len(history_response.data)} previous messages")
 
-    # Add the current message
-    messages.append({"role": "user", "content": message})
+        # Format messages correctly for Claude API
+        messages = []
+        for msg in history_response.data:
+            content = msg["content"]
+            if isinstance(content, dict) and "role" in content and "content" in content:
+                if content["content"]:  # Only add messages with non-empty content
+                    messages.append({
+                        "role": content["role"],
+                        "content": content["content"]
+                    })
 
-    # Store user message
-    user_message = {
-        "session_id": session_id,
-        "content": {"role": "user", "content": message},
-    }
-    user_msg_response = supabase.table("chat_messages").insert(user_message).execute()
-    if hasattr(user_msg_response, "error") and user_msg_response.error:
-        raise HTTPException(status_code=500, detail="Failed to store user message")
+        # Add the current message
+        messages.append({"role": "user", "content": message})
 
-    # Create AI message entry
-    ai_message = {
-        "session_id": session_id,
-        "content": {"role": "assistant", "content": ""},
-    }
-    ai_msg_response = supabase.table("chat_messages").insert(ai_message).execute()
-    if hasattr(ai_msg_response, "error") and ai_msg_response.error:
-        raise HTTPException(status_code=500, detail="Failed to create AI message entry")
+        # Store user message
+        user_message = {
+            "session_id": session_id,
+            "content": {"role": "user", "content": message},
+        }
+        user_msg_response = supabase.table("chat_messages").insert(user_message).execute()
+        if hasattr(user_msg_response, "error") and user_msg_response.error:
+            raise HTTPException(status_code=500, detail="Failed to store user message")
 
-    ai_message_id = ai_msg_response.data[0]["id"]
-    full_ai_response = ""
+        # Create AI message entry
+        ai_message = {
+            "session_id": session_id,
+            "content": {"role": "assistant", "content": ""},
+        }
+        ai_msg_response = supabase.table("chat_messages").insert(ai_message).execute()
+        if hasattr(ai_msg_response, "error") and ai_msg_response.error:
+            raise HTTPException(status_code=500, detail="Failed to create AI message entry")
 
-    async def generate():
-        nonlocal full_ai_response
-        try:
-            with client.messages.stream(
-                max_tokens=1024,
-                messages=[*messages, {"role": "user", "content": message}],
-                model="claude-3-haiku-20240307",
-            ) as stream:
-                for text in stream.text_stream:
-                    timestamp = datetime.now().isoformat()
-                    print(f"[{timestamp}] Sending chunk: {text}")
-                    full_ai_response += text
-                    yield f"data: {text}\n\n"
-                    await asyncio.sleep(0.1)
+        ai_message_id = ai_msg_response.data[0]["id"]
+        full_ai_response = ""
 
+        async def generate():
+            nonlocal full_ai_response
+            try:
+                print("[Chat] Starting message stream generation")
+                with client.messages.stream(
+                    max_tokens=1024,
+                    messages=[*messages, {"role": "user", "content": message}],
+                    model="claude-3-haiku-20240307",
+                ) as stream:
+                    for text in stream.text_stream:
+                        timestamp = datetime.now().isoformat()
+                        print(f"[Chat] [{timestamp}] Streaming chunk: {text[:50]}...")
+                        full_ai_response += text
+                        yield f"data: {text}\n\n"
+                        await asyncio.sleep(0.1)
+
+                print("[Chat] Stream complete, updating AI message")
                 # Update the AI message with complete response
-                supabase.table("chat_messages").update(
+                update_response = supabase.table("chat_messages").update(
                     {"content": {"role": "assistant", "content": full_ai_response}}
                 ).eq("id", ai_message_id).execute()
+                
+                if hasattr(update_response, "error") and update_response.error:
+                    print(f"[Chat] Error updating AI message: {update_response.error}")
+                else:
+                    print("[Chat] Successfully updated AI message")
 
                 yield "data: [END]\n\n"
-        except Exception as e:
-            print(f"[ERROR] Exception in generate: {str(e)}")
-            yield f"data: Error occurred: {str(e)}\n\n"
+            except Exception as e:
+                print(f"[Chat] Error in generate: {str(e)}")
+                yield f"data: Error occurred: {str(e)}\n\n"
 
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        },
-    )
+        print("[Chat] Returning StreamingResponse")
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
+        )
+    except Exception as e:
+        print(f"[Chat] Unhandled error in stream_chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
