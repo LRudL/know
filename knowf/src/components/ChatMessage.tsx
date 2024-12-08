@@ -4,6 +4,7 @@ import { debug } from "@/lib/debug";
 type MessageContent =
   | { type: "text"; text: string }
   | { type: "tool_result"; content: string; tool_use_id: string }
+  | { type: "tool_use"; content: string }
   | { type: "thinking"; text: string };
 
 export interface ChatMessageProps {
@@ -60,6 +61,12 @@ const renderThinkingText = (text: string) => {
 const contentRenderers = {
   text: (content: { text: string }) => renderThinkingText(content.text),
   tool_result: renderToolResult,
+  tool_use: (content: { content: string }) => (
+    <div className="whitespace-pre-wrap">
+      <div className="text-xs text-gray-500">Tool Use:</div>
+      {content.content}
+    </div>
+  ),
   raw: (text: string) => renderThinkingText(text),
 };
 
