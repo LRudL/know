@@ -1,36 +1,38 @@
-import React, { useState, useEffect } from "react";
+import { Button, Flex } from "@radix-ui/themes";
 import { dateService } from "../lib/date";
+import { useQueryClient } from "@tanstack/react-query";
 
-export const MockDate: React.FC = () => {
-  const [currentDate, setCurrentDate] = useState<Date>(dateService.now());
+export function MockDate() {
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentDate(dateService.now());
-    }, 1000); // Update every second
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const addHours = (hours: number) => {
-    const newDate = new Date(currentDate.getTime() + hours * 60 * 60 * 1000);
-    dateService.setMockedDate(newDate);
-  };
-
-  const addDays = (days: number) => {
-    const newDate = dateService.addDays(days);
-    dateService.setMockedDate(newDate);
+  const handleDateChange = (days: number) => {
+    dateService.adjustMockDate(days, 0);
+    // Invalidate all learning state queries since they depend on the current date
+    queryClient.invalidateQueries({ queryKey: ["learningState"] });
   };
 
   return (
-    <div>
-      <div>
-        Current Date: {currentDate.toISOString().slice(0, 16).replace("T", " ")}
-      </div>
-      <button onClick={() => addHours(1)}>+1h</button>
-      <button onClick={() => addDays(1)}>+1d</button>
-    </div>
+    <Flex direction="column" gap="2">
+      <div style={{ fontWeight: 'bold' }}>Mock Date</div>
+      <div>Current Date: {dateService.now().toLocaleString()}</div>
+      <Flex gap="2">
+        <Button 
+          size="1" 
+          variant="soft" 
+          onClick={() => handleDateChange(-1)}
+        >
+          -1d
+        </Button>
+        <Button 
+          size="1" 
+          variant="soft" 
+          onClick={() => handleDateChange(1)}
+        >
+          +1d
+        </Button>
+      </Flex>
+    </Flex>
   );
-};
+}
 
 export default MockDate;

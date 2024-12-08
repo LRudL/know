@@ -5,58 +5,31 @@ import { EventEmitter } from "events";
 // i.e. simulate time travel into the future to see if it behaves correctly.
 
 export class DateService {
-  private static instance: DateService;
-  private mockedDate: Date | null = null;
+  private mockDate: Date | null = null;
   private dateEmitter = new EventEmitter();
 
-  private constructor() {}
-
-  static getInstance(): DateService {
-    if (!DateService.instance) {
-      DateService.instance = new DateService();
-    }
-    return DateService.instance;
-  }
-
-  /**
-   * Get the current date, either real or mocked
-   */
   now(): Date {
-    return this.mockedDate || new Date();
+    return this.mockDate || new Date();
   }
 
-  /**
-   * Set a mocked date for testing
-   */
-  setMockedDate(date: Date | null) {
-    this.mockedDate = date;
-    this.dateEmitter.emit("dateChange", date);
-    debug.log("DateService: Mocked date set to", date?.toISOString() || "null");
-  }
-
-  /**
-   * Add days to current date
-   */
-  addDays(days: number): Date {
+  adjustMockDate(days: number, hours: number): void {
     const currentDate = this.now();
-    return new Date(currentDate.getTime() + days * 24 * 60 * 60 * 1000);
+    const newDate = new Date(currentDate);
+    newDate.setDate(newDate.getDate() + days);
+    newDate.setHours(newDate.getHours() + hours);
+    this.mockDate = newDate;
+    this.dateEmitter.emit("dateChange", newDate);
+    debug.log("DateService: Adjusted mock date to", newDate.toISOString());
   }
 
-  addHours(hours: number): Date {
-    const currentDate = this.now();
-    return new Date(currentDate.getTime() + hours * 60 * 60 * 1000);
+  resetMockDate(): void {
+    this.mockDate = null;
+    this.dateEmitter.emit("dateChange", null);
+    debug.log("DateService: Reset mock date");
   }
 
-  /**
-   * Clear any mocked date and return to real time
-   */
-  clearMockedDate() {
-    this.mockedDate = null;
-    debug.log("DateService: Cleared mocked date");
-  }
-
-  // Add subscription methods
-  subscribe(callback: (date: Date) => void): () => void {
+  // Keep existing subscribe method
+  subscribe(callback: (date: Date | null) => void): () => void {
     this.dateEmitter.on("dateChange", callback);
     return () => {
       this.dateEmitter.off("dateChange", callback);
@@ -64,5 +37,4 @@ export class DateService {
   }
 }
 
-// Export a singleton instance
-export const dateService = DateService.getInstance();
+export const dateService = new DateService();
