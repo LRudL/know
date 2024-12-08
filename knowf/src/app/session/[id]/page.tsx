@@ -126,12 +126,15 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
 
         if (isFirstChunk) {
           isFirstChunk = false;
-          setMessages((prev) => [...prev, { role: "assistant", content: event.data }]);
+          setMessages((prev) => [...prev, { 
+            role: "assistant", 
+            content: String(event.data) 
+          }]);
         } else {
           setMessages((prev) => {
             const newMessages = [...prev];
             const lastMessage = { ...newMessages[newMessages.length - 1] };
-            lastMessage.content = lastMessage.content + event.data;
+            lastMessage.content = String(lastMessage.content) + String(event.data);
             return [...newMessages.slice(0, -1), lastMessage];
           });
         }
@@ -213,7 +216,9 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
                   : "bg-gray-100 mr-auto max-w-[80%]"
               }`}
             >
-              {message.content}
+              {typeof message.content === 'string' 
+                ? message.content 
+                : JSON.stringify(message.content)}
             </div>
           ))}
           <div ref={messagesEndRef} />
