@@ -61,7 +61,7 @@ const renderThinkingText = (text: string) => {
         if (part === "<thinking>") {
           isThinking = true;
           return (
-            <span key={`tag-${index}`} className="text-red-500">
+            <span key={`tag-${index}`} className="text-blue-500">
               &lt;thinking&gt;
             </span>
           );
@@ -69,7 +69,7 @@ const renderThinkingText = (text: string) => {
         if (part === "</thinking>") {
           isThinking = false;
           return (
-            <span key={`tag-${index}`} className="text-red-500">
+            <span key={`tag-${index}`} className="text-blue-500">
               &lt;/thinking&gt;
             </span>
           );
@@ -77,7 +77,7 @@ const renderThinkingText = (text: string) => {
         return part ? (
           <span
             key={index}
-            className={isThinking ? "text-red-500" : ""}
+            className={isThinking ? "text-blue-500" : ""}
             style={{ whiteSpace: "pre-wrap" }}
           >
             {part}
