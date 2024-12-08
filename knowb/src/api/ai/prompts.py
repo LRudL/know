@@ -1,6 +1,38 @@
+import base64
 import json
 
+from supabase import Client
+
+from src.api.data import session_id_to_document_id
+from src.api.graph import get_unlocked_nodes
+from src.api.pdf2text import convert_base64_pdf_to_text
+from src.api.routes.content_map import get_document_content
 from src.api.models import ContentMapEdge, ContentMapEdgePreID, ContentMapNode
+
+SESSION_SYSTEM_PROMPT = """
+You are a helpful socratic tutor guiding a learner through various concepts. You are given the ground truth document that contains information about all concepts, and a list of "knowledge nodes" that the learner wants to learn about the document. You should ask questions to the user to help them learn the concept nodes, and give them feedback on their responses. Your questions should be clear, such that the answer is unambiguous. Imagine you are asking Anki flashcard questions. You should not mention the existence of nodes to the user, except for when emitting "tags" or within <thinking> tags, neither of which will be shown to the user.
+
+Each node is equipped with an id, summary, content and supporting quotes from the original document. You will be given a list of nodes that the learner has already learned at least once, that they should review. You will also be given a list of nodes that the learner has not yet learned, that they should learn. Reviews can be briefer than concepts that the user has not yet learned. 
+
+You have judgement over which nodes should be addressed, and in what order. You should try and ensure the reader understand the more basic concepts before progressing to the more complex ones. Your goal is to maximise the learner's understanding of the document. The learner can go on tangents, but you should try to keep them focused on the main concepts. 
+
+In this environment you have access to a tool called "node_complete". You should use this tool when you wish to move on to to teaching a new topic, and after the user has satisfactorily answered, or spent significant effort on, a node. You can pass in a judgement of "easy", "good", "hard" or "failed". Upon using this tool, you will be returned a new set of nodes to teach next. After recieving the outputs of this tool, you should think through your next set of questions once more in <thinking> tags, and then respond with your next set of questions.
+
+Here is the document content:
+{document_content}
+
+Here are the nodes to choose from to address in this session. You should only choose one node to address.
+
+NODES TO ADDRESS:
+{nodes_to_address}
+
+Before starting, think about which node might be best to start with, and come up with a planned set of questions. Use <thinking> tags to indicate your initial plan. Before each response, feel free to use <thinking> tags to change your plans.
+""".strip()
+
+TOOL_USE_ATTACHMENT = """
+NODES TO ADDRESS:
+{nodes_to_address}
+""".strip()
 
 
 BRAINSTORM_PROMPT = """
@@ -69,3 +101,35 @@ def parse_graph_output(
     ]
 
     return nodes, edges
+
+
+def format_node_for_session_prompt(node: ContentMapNode) -> str:
+    node_dict = {
+        "id": node.order_index,
+        "content": node.content,
+        "summary": node.summary,
+        "supporting_quotes": node.supporting_quotes,
+    }
+    return json.dumps(node_dict, indent=2)
+
+async def get_session_system_prompt(chat_session_id: str, client: Client):
+    
+    # Get document_id from chat_sessions table
+    document_id = session_id_to_document_id(chat_session_id, client)
+    
+    # Get document content
+    document_content = get_document_content(document_id, client)
+    base64_document_content = base64.b64encode(document_content).decode("utf-8")
+    string_document_content = convert_base64_pdf_to_text(base64_document_content)
+    
+    # Get learning state
+    unlocked_nodes = await get_unlocked_nodes(chat_session_id, client)
+    
+    formatted_nodes_to_address = "\n".join(format_node_for_session_prompt(node) for node in unlocked_nodes)
+
+    return SESSION_SYSTEM_PROMPT.format(nodes_to_address=formatted_nodes_to_address, document_content=string_document_content)
+
+
+def get_node_complete_prompt(nodes_to_address: list[ContentMapNode]) -> str:
+    formatted_nodes_to_address = "\n".join(format_node_for_session_prompt(node) for node in nodes_to_address)
+    return TOOL_USE_ATTACHMENT.format(nodes_to_address=formatted_nodes_to_address)

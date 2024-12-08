@@ -1,13 +1,13 @@
-import traceback
 from datetime import datetime
+import traceback
 from fastapi import APIRouter, Depends, HTTPException
+from src.api.graph import get_graph_learning_state
 from src.services import get_supabase_client
 from src.services.security import get_user_id_from_token, security
 from src.api.models import (
     LearningProgressUpdateRequest,
 )
 from src.api.learning_progress import (
-    get_graph_learning_state,
     update_learning_progress,
     delete_learning_progress,
 )

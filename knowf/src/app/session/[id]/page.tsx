@@ -9,6 +9,15 @@ import { useSession } from "@/hooks/useSession";
 import { SessionService, ChatMessageContent } from "@/lib/sessionService";
 import QueryProvider from "@/providers/query-provider";
 import React from "react";
+import {
+  ChatMessage,
+  ChatMessageManager,
+  ChatMessageProps,
+} from "@/components/ChatMessage";
+import {
+  RenderLevelProvider,
+  RenderLevelSelector,
+} from "@/components/ChatMessageRenderLevel";
 
 export default function ChatSessionWrapper({
   params,
@@ -17,7 +26,9 @@ export default function ChatSessionWrapper({
 }) {
   return (
     <QueryProvider>
-      <ChatSession params={params} />
+      <RenderLevelProvider>
+        <ChatSession params={params} />
+      </RenderLevelProvider>
     </QueryProvider>
   );
 }
@@ -32,74 +43,33 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
 
   const sessionId = unwrappedParams.id;
   const { data: session, isLoading } = useSession(sessionId);
-  const [messages, setMessages] = useState<ChatMessageContent[]>([]);
+  const [messages, setMessages] = useState<ChatMessageProps[]>([]);
   const [inputText, setInputText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const eventSourceRef = useRef<EventSourcePolyfill | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    async function loadMessages() {
-      const sessionMessages = await SessionService.getSessionMessages(
-        sessionId
-      );
-      setMessages(sessionMessages.map((msg) => msg.content));
-    }
-    loadMessages();
-  }, [sessionId]);
-
-  if (isLoading) {
-    return <div>Loading session...</div>;
-  }
-
-  if (!session) {
-    return <div>Session not found</div>;
-  }
-
-  // Auto-scroll to bottom when messages update
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const sendMessage = async () => {
-    if (!inputText.trim()) return;
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("No auth session");
+  const handleSendMessage = async (messageText: string) => {
+    if (!messageText.trim()) return;
 
     debug.log("Starting new message stream");
-    const userMessage: ChatMessageContent = {
-      role: "user",
-      content: inputText,
-    };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => [...prev, { role: "user", content: messageText }]);
     setInputText("");
     setIsStreaming(true);
-
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
     try {
-      debug.log("Creating EventSource connection");
-      const eventSource = new EventSourcePolyfill(
-        `/api/chat/stream?message=${encodeURIComponent(
-          inputText
-        )}&session_id=${sessionId}`,
-        {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }
+      const eventSource = await SessionService.sendMessage(
+        sessionId,
+        messageText
       );
       eventSourceRef.current = eventSource;
 
-      eventSource.onopen = () => {
-        debug.log("EventSource connection opened");
-      };
-
       eventSource.onmessage = (event) => {
-        // debug.log("Raw event received:", event);
-        // debug.log("Event data:", event.data);
-
         if (event.data === "[END]") {
           debug.log("Received end of stream signal");
           eventSource.close();
@@ -108,28 +78,14 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           return;
         }
 
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          const lastMessage = { ...newMessages[newMessages.length - 1] };
-          lastMessage.content = lastMessage.content + event.data;
-          return [...newMessages.slice(0, -1), lastMessage];
-        });
+        setMessages((prev) =>
+          ChatMessageManager.updateLatestMessage(prev, event.data)
+        );
         scrollToBottom();
       };
 
       eventSource.onerror = (error) => {
-        debug.log("EventSource readyState:", eventSource.readyState);
-        // EventSourcePolyfill.CLOSED is 2
-        if (eventSource.readyState === 2) {
-          debug.log("EventSource connection closed normally");
-        } else {
-          debug.error("EventSource error:", error);
-          debug.log("EventSource full state:", {
-            readyState: eventSource.readyState,
-            url: eventSource.url,
-            withCredentials: eventSource.withCredentials,
-          });
-        }
+        debug.error("EventSource error:", error);
         eventSource.close();
         setIsStreaming(false);
         eventSourceRef.current = null;
@@ -139,6 +95,38 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       setIsStreaming(false);
     }
   };
+
+  useEffect(() => {
+    async function loadMessages() {
+      const sessionMessages = await SessionService.getSessionMessages(
+        sessionId
+      );
+      setMessages(
+        sessionMessages.map((msg) => ({
+          role: msg.content.role,
+          content: msg.content.content,
+          isLatest: false,
+        }))
+      );
+
+      // If no messages exist, automatically send initial message
+      if (sessionMessages.length === 0) {
+        handleSendMessage("I'm ready to get started.");
+      }
+    }
+    loadMessages();
+  }, [sessionId]);
+
+  // Use handleSendMessage directly with the current input text
+  const onSendClick = () => handleSendMessage(inputText);
+
+  if (isLoading) {
+    return <div>Loading session...</div>;
+  }
+
+  if (!session) {
+    return <div>Session not found</div>;
+  }
 
   const clearHistory = async () => {
     try {
@@ -169,6 +157,9 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           >
             Clear History
           </button>
+          <div className="ml-auto">
+            <RenderLevelSelector />
+          </div>
         </div>
         <p className="text-sm text-gray-500">Session ID: {sessionId}</p>
       </div>
@@ -176,33 +167,34 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       <div className="flex-1 flex flex-col p-4">
         <div className="flex-1 overflow-y-auto mb-4 space-y-4">
           {messages.map((message, index) => (
-            <div
-              key={index}
-              className={`p-4 rounded-lg ${
-                message.role === "user"
-                  ? "bg-blue-100 ml-auto max-w-[80%]"
-                  : "bg-gray-100 mr-auto max-w-[80%]"
-              }`}
-            >
-              {message.content}
+            <div key={`message-${index}`}>
+              {ChatMessageManager.renderMessage({
+                role: message.role,
+                content: message.content,
+                isLatest: index === messages.length - 1,
+              })}
             </div>
           ))}
           <div ref={messagesEndRef} />
         </div>
         <div className="flex gap-2">
-          <input
-            type="text"
+          <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            onKeyPress={(e) =>
-              e.key === "Enter" && !isStreaming && sendMessage()
-            }
-            className="flex-1 p-2 border rounded"
-            placeholder="Type your message..."
+            onKeyPress={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !isStreaming) {
+                e.preventDefault();
+                onSendClick();
+              }
+            }}
+            className="flex-1 p-2 border rounded resize-none"
+            placeholder="Type your message... (Shift+Enter for new line)"
             disabled={isStreaming}
+            rows={1}
+            style={{ minHeight: "42px" }}
           />
           <button
-            onClick={sendMessage}
+            onClick={onSendClick}
             disabled={isStreaming || !inputText.trim()}
             className="p-2 bg-blue-500 text-white rounded disabled:bg-blue-300"
           >
