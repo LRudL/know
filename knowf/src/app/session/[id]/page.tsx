@@ -9,6 +9,15 @@ import { useSession } from "@/hooks/useSession";
 import { SessionService, ChatMessageContent } from "@/lib/sessionService";
 import QueryProvider from "@/providers/query-provider";
 import React from "react";
+import {
+  ChatMessage,
+  ChatMessageManager,
+  ChatMessageProps,
+} from "@/components/ChatMessage";
+import {
+  RenderLevelProvider,
+  RenderLevelSelector,
+} from "@/components/ChatMessageRenderLevel";
 
 export default function ChatSessionWrapper({
   params,
@@ -17,7 +26,9 @@ export default function ChatSessionWrapper({
 }) {
   return (
     <QueryProvider>
-      <ChatSession params={params} />
+      <RenderLevelProvider>
+        <ChatSession params={params} />
+      </RenderLevelProvider>
     </QueryProvider>
   );
 }
@@ -32,7 +43,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
 
   const sessionId = unwrappedParams.id;
   const { data: session, isLoading } = useSession(sessionId);
-  const [messages, setMessages] = useState<ChatMessageContent[]>([]);
+  const [messages, setMessages] = useState<ChatMessageProps[]>([]);
   const [inputText, setInputText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const eventSourceRef = useRef<EventSourcePolyfill | null>(null);
@@ -43,7 +54,13 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       const sessionMessages = await SessionService.getSessionMessages(
         sessionId
       );
-      setMessages(sessionMessages.map((msg) => msg.content));
+      setMessages(
+        sessionMessages.map((msg) => ({
+          role: msg.content.role,
+          content: msg.content.content,
+          isLatest: false,
+        }))
+      );
     }
     loadMessages();
   }, [sessionId]);
@@ -106,15 +123,15 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
         }
 
         setMessages((prev) => {
-          const newMessages = [...prev];
-          const lastMessage = { ...newMessages[newMessages.length - 1] };
           try {
             const unescapedData = JSON.parse(`"${event.data}"`);
-            lastMessage.content = lastMessage.content + unescapedData;
+            return ChatMessageManager.updateLatestMessage(prev, unescapedData);
           } catch {
-            lastMessage.content = lastMessage.content + event.data.replace(/\\/g, '');
+            return ChatMessageManager.updateLatestMessage(
+              prev,
+              event.data.replace(/\\/g, "")
+            );
           }
-          return [...newMessages.slice(0, -1), lastMessage];
         });
         scrollToBottom();
       };
@@ -171,6 +188,9 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           >
             Clear History
           </button>
+          <div className="ml-auto">
+            <RenderLevelSelector />
+          </div>
         </div>
         <p className="text-sm text-gray-500">Session ID: {sessionId}</p>
       </div>
@@ -178,30 +198,31 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       <div className="flex-1 flex flex-col p-4">
         <div className="flex-1 overflow-y-auto mb-4 space-y-4">
           {messages.map((message, index) => (
-            <div
-              key={index}
-              className={`p-4 rounded-lg ${
-                message.role === "user"
-                  ? "bg-blue-100 ml-auto max-w-[80%]"
-                  : "bg-gray-100 mr-auto max-w-[80%]"
-              }`}
-            >
-              {message.content}
+            <div key={`message-${index}`}>
+              {ChatMessageManager.renderMessage({
+                role: message.role,
+                content: message.content,
+                isLatest: index === messages.length - 1,
+              })}
             </div>
           ))}
           <div ref={messagesEndRef} />
         </div>
         <div className="flex gap-2">
-          <input
-            type="text"
+          <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            onKeyPress={(e) =>
-              e.key === "Enter" && !isStreaming && sendMessage()
-            }
-            className="flex-1 p-2 border rounded"
-            placeholder="Type your message..."
+            onKeyPress={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !isStreaming) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+            className="flex-1 p-2 border rounded resize-none"
+            placeholder="Type your message... (Shift+Enter for new line)"
             disabled={isStreaming}
+            rows={1}
+            style={{ minHeight: "42px" }}
           />
           <button
             onClick={sendMessage}
