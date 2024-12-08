@@ -1,11 +1,27 @@
 import { useEffect, useState } from "react";
 import { debug } from "@/lib/debug";
 
-type MessageContent =
+export type ToolUseContent = {
+  type: "tool_use";
+  tool_use_id: string;
+  content: string;
+};
+
+export type NodeJudgementToolUseCall = {
+  id: string;
+  name: string;
+  type: "tool_use";
+  input: {
+    node_id: number;
+    judgement: string;
+  };
+};
+
+export type MessageContent =
   | { type: "text"; text: string }
-  | { type: "tool_result"; content: string; tool_use_id: string }
-  | { type: "tool_use"; content: string }
-  | { type: "thinking"; text: string };
+  | { type: "thinking"; content: string }
+  | { type: "tool_use"; content: ToolUseContent[]; toolId: string }
+  | { type: "tool_result"; content: string; tool_use_id: string };
 
 export interface ChatMessageProps {
   role: "user" | "assistant";
