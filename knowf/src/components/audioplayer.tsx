@@ -1,5 +1,5 @@
 import { debug } from "@/lib/debug";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface AudioPlayerProps {
   text: string;
@@ -10,9 +10,30 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text }) => {
   const audioQueueRef = useRef<AudioBuffer[]>([]);
   const isPlayingRef = useRef(false);
   const textBufferRef = useRef<string>("");
+  const [needsUserActivation, setNeedsUserActivation] = useState(false);
+
+  const initializeAudioContext = () => {
+    try {
+      audioContextRef.current = new AudioContext();
+      if (audioContextRef.current.state === "suspended") {
+        setNeedsUserActivation(true);
+      }
+    } catch (error) {
+      debug.error("Failed to initialize AudioContext:", error);
+    }
+  };
+
+  const handleUserActivation = async () => {
+    try {
+      await audioContextRef.current?.resume();
+      setNeedsUserActivation(false);
+    } catch (error) {
+      debug.error("Failed to resume AudioContext:", error);
+    }
+  };
 
   useEffect(() => {
-    audioContextRef.current = new AudioContext();
+    initializeAudioContext();
     return () => {
       audioContextRef.current?.close();
     };
@@ -134,5 +155,18 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text }) => {
     source.start(0);
   };
 
-  return null;
+  return (
+    <>
+      {needsUserActivation && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <button
+            onClick={handleUserActivation}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg transition-colors"
+          >
+            Enable Audio
+          </button>
+        </div>
+      )}
+    </>
+  );
 };
