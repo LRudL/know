@@ -283,6 +283,13 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
         }}
         fitView
       >
+        <Panel position="top-left">
+          <div className="bg-white p-4 rounded shadow">
+            <div className="flex items-center gap-4">
+              <MockDate />
+            </div>
+          </div>
+        </Panel>
       </ReactFlow>
 
       {/* Info Panel */}
