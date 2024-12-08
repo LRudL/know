@@ -20,17 +20,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text }) => {
 
   useEffect(() => {
     if (!text) {
-      // debug.log("[AudioPlayer] Received empty text, skipping");
       return;
     }
     if (!audioContextRef.current) {
-      // debug.log("[AudioPlayer] No audio context, skipping");
       return;
     }
 
-    // debug.log("[AudioPlayer] Processing text:", text);
-    // Append new text to buffer
-    textBufferRef.current += text;
+    // Clean the text by replacing both escaped and regular newlines with spaces
+    const cleanedText = text
+      .replace(/\\n/g, " ") // Replace escaped newlines
+      .replace(/\n/g, " ") // Replace regular newlines
+      .replace(/\s+/g, " "); // Collapse multiple spaces
+
+    // Append cleaned text to buffer
+    textBufferRef.current += cleanedText;
 
     // Split buffer into sentences using regex that matches sentence endings
     const sentences = textBufferRef.current.match(/[^.!?]+[.!?]+/g) || [];
