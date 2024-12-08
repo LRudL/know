@@ -4,7 +4,7 @@ from src.api.routes import learning
 from src.api.routes import content_map
 from src.services.security import security
 from src.api.routes import documents
-from src.api.routes import chat
+from src.api.routes import session
 from src.api.routes import test
 from src.api.routes import tts_routes
 
@@ -22,7 +22,7 @@ app.add_middleware(
 # Include routers
 app.include_router(documents.router, prefix="/api/documents")
 app.include_router(content_map.router, prefix="/api/content_map")
-app.include_router(chat.router, prefix="/api/chat")
+app.include_router(session.router, prefix="/api/chat")
 app.include_router(test.router, prefix="/api/test")
 app.include_router(learning.router, prefix="/api/learning")
 app.include_router(tts_routes.router)

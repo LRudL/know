@@ -6,6 +6,7 @@ import { usePromptName } from "@/hooks/usePromptName";
 import { useGetOrCreateSession } from "@/hooks/useSession";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { debug } from "@/lib/debug";
+import { supabase } from "@/lib/supabase";
 
 export function DocumentActions({ doc }: { doc: Document }) {
   const queryClient = useQueryClient();
@@ -52,6 +53,42 @@ export function DocumentActions({ doc }: { doc: Document }) {
     }
   };
 
+  const { mutate: deleteLearningProgress, isPending: isDeletingProgress } =
+    useMutation({
+      mutationFn: async () => {
+        if (!graph?.id) return;
+
+        // First get all learning progress records for this graph
+        const { data: progressRecords, error: progressError } = await supabase
+          .from("learning_progress")
+          .select("id")
+          .eq("graph_id", graph.id);
+
+        if (progressError) throw progressError;
+
+        // Delete all associated learning progress updates
+        for (const record of progressRecords || []) {
+          const { error: updateError } = await supabase
+            .from("learning_progress_updates")
+            .delete()
+            .eq("learning_progress_id", record.id);
+
+          if (updateError) throw updateError;
+        }
+
+        // Then delete the learning progress records
+        const { error } = await supabase
+          .from("learning_progress")
+          .delete()
+          .eq("graph_id", graph.id);
+
+        if (error) throw error;
+      },
+      onError: (error) => {
+        debug.error("Error deleting learning progress:", error);
+      },
+    });
+
   return (
     <td className="border border-gray-300 p-2">
       <div className="flex gap-2">
@@ -81,6 +118,13 @@ export function DocumentActions({ doc }: { doc: Document }) {
               className="bg-red-500 text-white rounded px-4 py-2 disabled:bg-red-300"
             >
               {isDeleting ? "Deleting..." : "Delete Map"}
+            </button>
+            <button
+              onClick={() => deleteLearningProgress()}
+              disabled={isDeletingProgress}
+              className="bg-orange-500 text-white rounded px-4 py-2 disabled:bg-orange-300"
+            >
+              {isDeletingProgress ? "Resetting..." : "Delete Progress"}
             </button>
           </>
         )}
