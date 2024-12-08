@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from src.api.routes import speech
 from src.api.routes import learning
 from src.api.routes import content_map
 from src.services.security import security
@@ -26,3 +27,4 @@ app.include_router(session.router, prefix="/api/chat")
 app.include_router(test.router, prefix="/api/test")
 app.include_router(learning.router, prefix="/api/learning")
 # app.include_router(tts_routes.router)
+app.include_router(speech.router, prefix="/api")

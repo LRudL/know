@@ -246,22 +246,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           <div ref={messagesEndRef} />
         </div>
         <div className="flex gap-2 p-4 border-t">
-          {isSpeechEnabled ? (
-            <div className="flex items-center gap-4 w-full">
-              <SpeechInput
-                onTranscript={(text) => {
-                  setInputText(text);
-                  // Optionally auto-send the message:
-                  // sendMessage();
-                }}
-                sessionId={sessionId}
-                className="flex-shrink-0"
-              />
-              <span className="text-sm text-gray-500">
-                Click microphone to start/stop recording
-              </span>
-            </div>
-          ) : (
+          <div className="flex-1 flex gap-2">
             <input
               type="text"
               value={inputText}
@@ -273,7 +258,18 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
               placeholder="Type your message..."
               disabled={isStreaming}
             />
-          )}
+
+            {isSpeechEnabled && (
+              <SpeechInput
+                onTranscript={(text) => {
+                  setInputText(text);
+                }}
+                sessionId={sessionId}
+                className="flex-shrink-0"
+              />
+            )}
+          </div>
+
           <button
             onClick={sendMessage}
             disabled={isStreaming || !inputText.trim()}
