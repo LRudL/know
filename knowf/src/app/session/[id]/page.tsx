@@ -283,8 +283,8 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
         backgroundColor: "var(--color-background)"
       }} 
       display="flex" 
-      width="100%" 
-      height="100vh" 
+      width="100vw" 
+      height="100vh"
       direction="column"
       align="start"
     >
@@ -315,7 +315,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </div>
       <Separator orientation="horizontal" size="4"/>
-      <div style={{overflowY: "auto"}} className="flex-1 flex flex-col p-4" >
+      <div style={{overflowY: "auto", width: "100%"}} className="flex-1 flex flex-col p-4" >
         <div className="flex-1 overflow-y-auto mb-4 space-y-4">
           {messages.map((message, index) => (
             <div key={`message-${index}`}>
