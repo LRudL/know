@@ -10,9 +10,9 @@ import { useSession } from "@/hooks/useSession";
 import { SessionService, ChatMessageContent } from "@/lib/sessionService";
 import QueryProvider from "@/providers/query-provider";
 import React from "react";
-import { TTSStreamer } from '@/components/ttsstreamer';
+import { TTSStreamer } from "@/components/ttsstreamer";
 import { AudioPlayer } from "@/components/audioplayer";
-import { SpeechInput } from '@/components/SpeechInput';
+import { SpeechInput } from "@/components/SpeechInput";
 
 export default function ChatSessionWrapper({
   params,
@@ -41,7 +41,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const eventSourceRef = useRef<EventSourcePolyfill | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [ttsText, setTTSText] = useState<string>('');
+  const [ttsText, setTTSText] = useState<string>("");
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
   const [isSpeechEnabled, setIsSpeechEnabled] = useState(false);
 
@@ -81,7 +81,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       role: "user",
       content: inputText.trim(),
     };
-    
+
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
     setIsStreaming(true);
@@ -106,7 +106,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
 
       eventSource.onmessage = (event) => {
         debug.log("Received message:", event.data);
-        
+
         if (event.data === "[END]") {
           debug.log("Received end of stream signal");
           eventSource.close();
@@ -117,7 +117,13 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
 
         if (event.data.startsWith("Error:")) {
           debug.error("Received error from stream:", event.data);
-          setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, an error occurred. Please try again." }]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: "Sorry, an error occurred. Please try again.",
+            },
+          ]);
           eventSource.close();
           setIsStreaming(false);
           eventSourceRef.current = null;
@@ -126,23 +132,27 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
 
         if (isFirstChunk) {
           isFirstChunk = false;
-          setMessages((prev) => [...prev, { 
-            role: "assistant", 
-            content: String(event.data) 
-          }]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: String(event.data),
+            },
+          ]);
         } else {
           setMessages((prev) => {
             const newMessages = [...prev];
             const lastMessage = { ...newMessages[newMessages.length - 1] };
-            lastMessage.content = String(lastMessage.content) + String(event.data);
+            lastMessage.content =
+              String(lastMessage.content) + String(event.data);
             return [...newMessages.slice(0, -1), lastMessage];
           });
         }
-        
+
         if (isTTSEnabled && event.data.trim()) {
           setTTSText(event.data);
         }
-        
+
         scrollToBottom();
       };
 
@@ -151,12 +161,24 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
         eventSource.close();
         setIsStreaming(false);
         eventSourceRef.current = null;
-        setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, an error occurred. Please try again." }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "Sorry, an error occurred. Please try again.",
+          },
+        ]);
       };
     } catch (error) {
       debug.error("Error in chat:", error);
       setIsStreaming(false);
-      setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, an error occurred. Please try again." }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Sorry, an error occurred. Please try again.",
+        },
+      ]);
     }
   };
 
@@ -193,13 +215,13 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
             onClick={() => setIsTTSEnabled(!isTTSEnabled)}
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
           >
-            {isTTSEnabled ? '🔇 Mute TTS' : '🔈 Unmute TTS'}
+            {isTTSEnabled ? "🔇 Mute TTS" : "🔈 Unmute TTS"}
           </button>
           <button
             onClick={() => setIsSpeechEnabled(!isSpeechEnabled)}
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
           >
-            {isSpeechEnabled ? '🎤 Disable Voice' : '🎤 Enable Voice'}
+            {isSpeechEnabled ? "🎤 Disable Voice" : "🎤 Enable Voice"}
           </button>
         </div>
         <p className="text-sm text-gray-500">Session ID: {sessionId}</p>
@@ -216,8 +238,8 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
                   : "bg-gray-100 mr-auto max-w-[80%]"
               }`}
             >
-              {typeof message.content === 'string' 
-                ? message.content 
+              {typeof message.content === "string"
+                ? message.content
                 : JSON.stringify(message.content)}
             </div>
           ))}
@@ -244,7 +266,9 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && !isStreaming && sendMessage()}
+              onKeyPress={(e) =>
+                e.key === "Enter" && !isStreaming && sendMessage()
+              }
               className="flex-1 p-2 border rounded"
               placeholder="Type your message..."
               disabled={isStreaming}

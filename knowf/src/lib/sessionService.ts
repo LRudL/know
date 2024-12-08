@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { debug } from "@/lib/debug";
+import { EventSourcePolyfill } from "event-source-polyfill";
 
 export interface ChatSession {
   id: string;
@@ -133,5 +134,25 @@ export class SessionService {
       debug.error("[Clear] Full error in clearSessionMessages:", error);
       throw error;
     }
+  }
+
+  static async sendMessage(
+    sessionId: string,
+    message: string
+  ): Promise<EventSourcePolyfill> {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("No auth session");
+
+    debug.log("Creating EventSource connection");
+    return new EventSourcePolyfill(
+      `/api/chat/stream?message=${encodeURIComponent(
+        message
+      )}&session_id=${sessionId}`,
+      {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }
+    );
   }
 }

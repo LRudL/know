@@ -112,6 +112,12 @@ export const ChatMessage = ({
     setDisplayContent(content);
   }, [content]);
 
+  debug.log("[ChatMessage] Rendering message:", {
+    role,
+    content: displayContent,
+    isLatest,
+  });
+
   if (Array.isArray(displayContent)) {
     return (
       <div className="space-y-2">
@@ -158,33 +164,22 @@ export class ChatMessageManager {
     const newMessages = [...messages];
     const lastMessage = { ...newMessages[newMessages.length - 1] };
 
-    let processedContent = newContent;
-    try {
-      processedContent = JSON.parse(`"${newContent}"`);
-    } catch {
-      if (newContent.includes("\\")) {
-        debug.warn("Failed to parse streamed data, using raw:", newContent);
-      }
-      processedContent = newContent;
-    }
+    const unescapedContent = newContent
+      .replace(/\\n/g, "\n")
+      .replace(/\\\\/g, "\\")
+      .replace(/\\\n/g, "\n")
+      .replace(/\\$/g, "");
 
-    if (typeof lastMessage.content === "object") {
-      if (
-        "type" in lastMessage.content &&
-        lastMessage.content.type === "text"
-      ) {
-        lastMessage.content = {
-          type: "text",
-          text: lastMessage.content.text + processedContent,
-        };
-      } else {
-        debug.warn("Unexpected content structure:", lastMessage.content);
-        return messages;
-      }
-    } else if (typeof lastMessage.content === "string") {
+    if (typeof lastMessage.content === "string") {
+      lastMessage.content = lastMessage.content + unescapedContent;
+    } else if (
+      typeof lastMessage.content === "object" &&
+      "type" in lastMessage.content &&
+      lastMessage.content.type === "text"
+    ) {
       lastMessage.content = {
         type: "text",
-        text: lastMessage.content + processedContent,
+        text: lastMessage.content.text + unescapedContent,
       };
     } else {
       debug.warn("Unexpected content type:", typeof lastMessage.content);
