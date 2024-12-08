@@ -80,7 +80,6 @@ async def handle_chat_stream(message: str, session_id: str, token: str):
 
     # Combine system prompt with chat history (so we dont have to add the long pdf content to the chat history)
     messages = [system_message] + [msg["content"] for msg in history_response.data]
-
     # Store user message
     user_message = {"role": "user", "content": message}
     user_msg_response = (
@@ -103,7 +102,7 @@ async def handle_chat_stream(message: str, session_id: str, token: str):
         # set up a stream
         stream = client.beta.prompt_caching.messages.stream(
             max_tokens=1024,
-            messages=[*messages, {"role": "user", "content": message}],
+            messages=[*messages],
             model="claude-3-5-sonnet-20241022",
             tools=TOOLS,
         ).__enter__()
