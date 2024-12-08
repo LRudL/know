@@ -263,7 +263,7 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
       direction="column"
       align="start"
     >
-      <Header />
+      <Header back={true}/>
       <ReactFlow
         nodes={elements.nodes}
         edges={elements.edges}

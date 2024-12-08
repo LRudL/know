@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { debug } from "@/lib/debug";
 import { Flex, Text, Button, Separator } from "@radix-ui/themes";
 
-export function Header() {
+export function Header({back} : {back: boolean}) {
 
   const { signOut } = useAuth();
   const router = useRouter();
@@ -53,6 +53,7 @@ export function Header() {
           flexGrow="1"
         >
           <Flex className="menu-bar" display="flex" px="5" py="1" align="start">
+            {back ? <Button onClick={() => router.push("/dashboard")} size="2" variant="solid">Dashboard</Button> : null}
             <Button onClick={() => router.push("/settings")} size="2" variant="solid">Settings</Button>
             <Button size="2" variant="solid">Support</Button>
             <Button onClick={handleSignOut} size="2" variant="solid">Sign Out</Button>

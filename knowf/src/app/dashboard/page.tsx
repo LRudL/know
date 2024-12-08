@@ -15,7 +15,8 @@ import {
 } from "@tanstack/react-query";
 import { UploadCard } from "@/components/UploadCard";
 import { ChatCard } from "@/components/ChatCard";
-import { Flex, Text, Button, Separator, Grid } from "@radix-ui/themes";
+import { Header } from "@/components/Header";
+import { Flex, Text, Button, Grid } from "@radix-ui/themes";
 import { ClockIcon, ChatBubbleIcon, CaretRightIcon } from "@radix-ui/react-icons";
 
 
@@ -146,46 +147,7 @@ function Dashboard() {
       direction="column"
       align="start"
     >
-      <header
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "start",
-          width: "100%"
-        }}
-      >
-        <Flex
-          className="header-container"
-          style={{
-            backgroundColor: "var(--accent-9)"
-          }}
-          display="flex"
-          width="100%"
-          height="var(--space-9)"
-          pl="7"
-          align="center"
-          gap="7"
-        >
-          <Text style={{color: "white"}} size="5" weight="bold">
-            Socractic
-          </Text>
-          <Flex className="menu-bar-container" 
-            display="flex" 
-            py="3" 
-            justify="end" 
-            align="center" 
-            gap="3" 
-            flexGrow="1"
-          >
-            <Flex className="menu-bar" display="flex" px="5" py="1" align="start">
-              <Button size="2" variant="solid">Settings</Button>
-              <Button size="2" variant="solid">Support</Button>
-              <Button size="2" variant="solid">Sign Out</Button>
-            </Flex>
-          </Flex>
-        </Flex>
-        <Separator orientation="horizontal" size="4"/>
-      </header>
+      <Header back={false}/>
       <Flex 
         className="body" 
         style={{
