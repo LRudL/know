@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+//import { use } from 'react';
 import { debug } from "@/lib/debug";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -11,6 +12,7 @@ import QueryProvider from "@/providers/query-provider";
 import React from "react";
 import { TTSStreamer } from '@/components/ttsstreamer';
 import { AudioPlayer } from "@/components/audioplayer";
+import { SpeechInput } from '@/components/SpeechInput';
 
 export default function ChatSessionWrapper({
   params,
@@ -41,6 +43,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [ttsText, setTTSText] = useState<string>('');
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
+  const [isSpeechEnabled, setIsSpeechEnabled] = useState(false);
 
   useEffect(() => {
     async function loadMessages() {
@@ -76,19 +79,20 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
     debug.log("Starting new message stream");
     const userMessage: ChatMessageContent = {
       role: "user",
-      content: inputText,
+      content: inputText.trim(),
     };
+    
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
     setIsStreaming(true);
 
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+    let isFirstChunk = true;
 
     try {
       debug.log("Creating EventSource connection");
       const eventSource = new EventSourcePolyfill(
         `/api/chat/stream?message=${encodeURIComponent(
-          inputText
+          inputText.trim()
         )}&session_id=${sessionId}`,
         {
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -101,6 +105,8 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       };
 
       eventSource.onmessage = (event) => {
+        debug.log("Received message:", event.data);
+        
         if (event.data === "[END]") {
           debug.log("Received end of stream signal");
           eventSource.close();
@@ -109,14 +115,28 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           return;
         }
 
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          const lastMessage = { ...newMessages[newMessages.length - 1] };
-          lastMessage.content = lastMessage.content + event.data;
-          return [...newMessages.slice(0, -1), lastMessage];
-        });
+        if (event.data.startsWith("Error:")) {
+          debug.error("Received error from stream:", event.data);
+          setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, an error occurred. Please try again." }]);
+          eventSource.close();
+          setIsStreaming(false);
+          eventSourceRef.current = null;
+          return;
+        }
+
+        if (isFirstChunk) {
+          isFirstChunk = false;
+          setMessages((prev) => [...prev, { role: "assistant", content: event.data }]);
+        } else {
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            const lastMessage = { ...newMessages[newMessages.length - 1] };
+            lastMessage.content = lastMessage.content + event.data;
+            return [...newMessages.slice(0, -1), lastMessage];
+          });
+        }
         
-        if (isTTSEnabled) {
+        if (isTTSEnabled && event.data.trim()) {
           setTTSText(event.data);
         }
         
@@ -124,25 +144,16 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       };
 
       eventSource.onerror = (error) => {
-        debug.log("EventSource readyState:", eventSource.readyState);
-        // EventSourcePolyfill.CLOSED is 2
-        if (eventSource.readyState === 2) {
-          debug.log("EventSource connection closed normally");
-        } else {
-          debug.error("EventSource error:", error);
-          debug.log("EventSource full state:", {
-            readyState: eventSource.readyState,
-            url: eventSource.url,
-            withCredentials: eventSource.withCredentials,
-          });
-        }
+        debug.error("EventSource error:", error);
         eventSource.close();
         setIsStreaming(false);
         eventSourceRef.current = null;
+        setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, an error occurred. Please try again." }]);
       };
     } catch (error) {
       debug.error("Error in chat:", error);
       setIsStreaming(false);
+      setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, an error occurred. Please try again." }]);
     }
   };
 
@@ -179,7 +190,13 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
             onClick={() => setIsTTSEnabled(!isTTSEnabled)}
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
           >
-            {isTTSEnabled ? '🔊 Mute TTS' : '🔈 Unmute TTS'}
+            {isTTSEnabled ? '🔇 Mute TTS' : '🔈 Unmute TTS'}
+          </button>
+          <button
+            onClick={() => setIsSpeechEnabled(!isSpeechEnabled)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
+          >
+            {isSpeechEnabled ? '🎤 Disable Voice' : '🎤 Enable Voice'}
           </button>
         </div>
         <p className="text-sm text-gray-500">Session ID: {sessionId}</p>
@@ -201,18 +218,33 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           ))}
           <div ref={messagesEndRef} />
         </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyPress={(e) =>
-              e.key === "Enter" && !isStreaming && sendMessage()
-            }
-            className="flex-1 p-2 border rounded"
-            placeholder="Type your message..."
-            disabled={isStreaming}
-          />
+        <div className="flex gap-2 p-4 border-t">
+          {isSpeechEnabled ? (
+            <div className="flex items-center gap-4 w-full">
+              <SpeechInput
+                onTranscript={(text) => {
+                  setInputText(text);
+                  // Optionally auto-send the message:
+                  // sendMessage();
+                }}
+                sessionId={sessionId}
+                className="flex-shrink-0"
+              />
+              <span className="text-sm text-gray-500">
+                Click microphone to start/stop recording
+              </span>
+            </div>
+          ) : (
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && !isStreaming && sendMessage()}
+              className="flex-1 p-2 border rounded"
+              placeholder="Type your message..."
+              disabled={isStreaming}
+            />
+          )}
           <button
             onClick={sendMessage}
             disabled={isStreaming || !inputText.trim()}
