@@ -7,12 +7,20 @@ interface SpeechInputProps {
   onTranscript: (text: string) => void;
   sessionId: string;
   className?: string;
+  buttonStyle?: React.CSSProperties;
+  buttonText?: string;
+  isRecording?: boolean;
+  onRecordingStateChange?: (isRecording: boolean) => void;
 }
 
 export const SpeechInput: React.FC<SpeechInputProps> = ({
   onTranscript,
   sessionId,
   className = "",
+  buttonStyle,
+  buttonText,
+  isRecording,
+  onRecordingStateChange,
 }) => {
   const [error, setError] = useState<string>("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -39,8 +47,9 @@ export const SpeechInput: React.FC<SpeechInputProps> = ({
         await sendAudioToGoogle(audioBlob);
       };
 
-      mediaRecorderRef.current.start(1000); // Collect data every second
+      mediaRecorderRef.current.start(1000);
       setIsListening(true);
+      onRecordingStateChange?.(true);
       setError("");
     } catch (err) {
       debug.error("Error starting recording:", err);
@@ -58,6 +67,7 @@ export const SpeechInput: React.FC<SpeechInputProps> = ({
         .getTracks()
         .forEach((track) => track.stop());
       setIsListening(false);
+      onRecordingStateChange?.(false);
     }
   };
 
@@ -116,17 +126,14 @@ export const SpeechInput: React.FC<SpeechInputProps> = ({
       <button
         onClick={isListening ? stopRecording : startRecording}
         className={`p-2 rounded-full transition-colors ${
-          isListening
+          isRecording
             ? "bg-red-500 hover:bg-red-600"
             : "bg-blue-500 hover:bg-blue-600"
         } text-white`}
-        title={isListening ? "Stop recording" : "Start recording"}
+        title={isRecording ? "Stop recording" : "Start recording"}
+        style={buttonStyle}
       >
-        {isListening ? (
-          <StopIcon className="h-5 w-5" />
-        ) : (
-          <MicrophoneIcon className="h-5 w-5" />
-        )}
+        {buttonText}
       </button>
       {error && (
         <div className="absolute top-full mt-1 text-red-500 text-sm whitespace-nowrap">
