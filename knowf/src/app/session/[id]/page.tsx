@@ -124,13 +124,13 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
 
         setMessages((prev) => {
           try {
+            // This properly unescapes newlines and other characters
             const unescapedData = JSON.parse(`"${event.data}"`);
             return ChatMessageManager.updateLatestMessage(prev, unescapedData);
           } catch {
-            return ChatMessageManager.updateLatestMessage(
-              prev,
-              event.data.replace(/\\/g, "")
-            );
+            // Don't just strip backslashes - they might be meaningful
+            debug.warn("Failed to parse streamed data, using raw:", event.data);
+            return ChatMessageManager.updateLatestMessage(prev, event.data);
           }
         });
         scrollToBottom();

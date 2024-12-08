@@ -43,10 +43,19 @@ const renderThinkingText = (text: string) => {
       {parts.map((part, index) => {
         if (part === "<thinking>") {
           isThinking = true;
-          return null;
-        } else if (part === "</thinking>") {
+          return (
+            <span key={`tag-${index}`} className="text-red-500">
+              &lt;thinking&gt;
+            </span>
+          );
+        }
+        if (part === "</thinking>") {
           isThinking = false;
-          return null;
+          return (
+            <span key={`tag-${index}`} className="text-red-500">
+              &lt;/thinking&gt;
+            </span>
+          );
         }
         return part ? (
           <span key={index} className={isThinking ? "text-red-500" : ""}>
@@ -146,16 +155,8 @@ export class ChatMessageManager {
     const lastMessage = { ...newMessages[newMessages.length - 1] };
 
     if (typeof lastMessage.content === "string") {
-      const content = lastMessage.content + newContent;
-      const thinkingTagCount = (content.match(/<thinking>/g) || []).length;
-      const closingTagCount = (content.match(/<\/thinking>/g) || []).length;
-
-      lastMessage.content = content;
-
-      if (thinkingTagCount > closingTagCount) {
-        lastMessage.content += "</thinking>";
-      }
-
+      // Just append the new content without adding closing tags
+      lastMessage.content = lastMessage.content + newContent;
       return [...newMessages.slice(0, -1), lastMessage];
     }
 
