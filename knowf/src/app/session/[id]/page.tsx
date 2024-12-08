@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+//import { use } from 'react';
 import { debug } from "@/lib/debug";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -9,6 +10,9 @@ import { useSession } from "@/hooks/useSession";
 import { SessionService, ChatMessageContent } from "@/lib/sessionService";
 import QueryProvider from "@/providers/query-provider";
 import React from "react";
+import { TTSStreamer } from "@/components/ttsstreamer";
+import { AudioPlayer } from "@/components/audioplayer";
+import { SpeechInput } from "@/components/SpeechInput";
 import {
   ChatMessage,
   ChatMessageManager,
@@ -18,6 +22,7 @@ import {
   RenderLevelProvider,
   RenderLevelSelector,
 } from "@/components/ChatMessageRenderLevel";
+import { StreamParser } from "@/lib/streamParser";
 
 export default function ChatSessionWrapper({
   params,
@@ -48,6 +53,129 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const eventSourceRef = useRef<EventSourcePolyfill | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [ttsText, setTTSText] = useState<string>("");
+  const [isTTSEnabled, setIsTTSEnabled] = useState(true);
+  const [isSpeechEnabled, setIsSpeechEnabled] = useState(true);
+  const [streamParser] = useState(() => new StreamParser());
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const sendMessage = async (messageText: string = inputText) => {
+    if (!messageText.trim()) return;
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("No auth session");
+
+    debug.log("Starting new message stream");
+
+    // Add user message
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: messageText.trim(),
+        isLatest: false,
+      },
+    ]);
+
+    setInputText("");
+    setIsStreaming(true);
+
+    // Add initial AI message
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: "",
+        isLatest: true,
+      },
+    ]);
+
+    try {
+      debug.log("Creating EventSource connection");
+      const eventSource = new EventSourcePolyfill(
+        `/api/chat/stream?message=${encodeURIComponent(
+          messageText.trim()
+        )}&session_id=${sessionId}`,
+        {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }
+      );
+      eventSourceRef.current = eventSource;
+
+      eventSource.onmessage = (event) => {
+        if (event.data === "[END]") {
+          debug.log("Received end of stream signal");
+          eventSource.close();
+          setIsStreaming(false);
+          eventSourceRef.current = null;
+          return;
+        }
+
+        if (event.data.startsWith("Error:")) {
+          debug.error("Received error from stream:", event.data);
+          setMessages((prev) => [
+            ...prev.slice(0, -1),
+            {
+              role: "assistant",
+              content: "Sorry, an error occurred. Please try again.",
+              isLatest: true,
+            },
+          ]);
+          eventSource.close();
+          setIsStreaming(false);
+          eventSourceRef.current = null;
+          return;
+        }
+
+        const chunks = streamParser.parseChunk(event.data);
+
+        // Update messages
+        setMessages((prev) =>
+          ChatMessageManager.updateLatestMessage(prev, chunks)
+        );
+
+        // Only send non-thinking text to TTS
+        chunks
+          .filter((chunk) => chunk.type === "text")
+          .forEach((chunk) => {
+            setTTSText(chunk.content);
+          });
+
+        scrollToBottom();
+      };
+
+      eventSource.onerror = (error) => {
+        debug.error("EventSource error:", error);
+        eventSource.close();
+        setIsStreaming(false);
+        eventSourceRef.current = null;
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "Sorry, an error occurred. Please try again.",
+            isLatest: true,
+          },
+        ]);
+      };
+    } catch (error) {
+      debug.error("Error in chat:", error);
+      setIsStreaming(false);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Sorry, an error occurred. Please try again.",
+          isLatest: true,
+        },
+      ]);
+    }
+  };
 
   useEffect(() => {
     async function loadMessages() {
@@ -61,6 +189,11 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           isLatest: false,
         }))
       );
+
+      // Auto-send initial message if no messages exist
+      if (sessionMessages.length === 0) {
+        sendMessage("I'm ready to get started.");
+      }
     }
     loadMessages();
   }, [sessionId]);
@@ -72,92 +205,6 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   if (!session) {
     return <div>Session not found</div>;
   }
-
-  // Auto-scroll to bottom when messages update
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const sendMessage = async () => {
-    if (!inputText.trim()) return;
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("No auth session");
-
-    debug.log("Starting new message stream");
-    const userMessage: ChatMessageContent = {
-      role: "user",
-      content: inputText,
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setInputText("");
-    setIsStreaming(true);
-
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-
-    try {
-      debug.log("Creating EventSource connection");
-      const eventSource = new EventSourcePolyfill(
-        `/api/chat/stream?message=${encodeURIComponent(
-          inputText
-        )}&session_id=${sessionId}`,
-        {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }
-      );
-      eventSourceRef.current = eventSource;
-
-      eventSource.onopen = () => {
-        debug.log("EventSource connection opened");
-      };
-
-      eventSource.onmessage = (event) => {
-        if (event.data === "[END]") {
-          debug.log("Received end of stream signal");
-          eventSource.close();
-          setIsStreaming(false);
-          eventSourceRef.current = null;
-          return;
-        }
-
-        setMessages((prev) => {
-          try {
-            // This properly unescapes newlines and other characters
-            const unescapedData = JSON.parse(`"${event.data}"`);
-            return ChatMessageManager.updateLatestMessage(prev, unescapedData);
-          } catch {
-            // Don't just strip backslashes - they might be meaningful
-            debug.warn("Failed to parse streamed data, using raw:", event.data);
-            return ChatMessageManager.updateLatestMessage(prev, event.data);
-          }
-        });
-        scrollToBottom();
-      };
-
-      eventSource.onerror = (error) => {
-        debug.log("EventSource readyState:", eventSource.readyState);
-        // EventSourcePolyfill.CLOSED is 2
-        if (eventSource.readyState === 2) {
-          debug.log("EventSource connection closed normally");
-        } else {
-          debug.error("EventSource error:", error);
-          debug.log("EventSource full state:", {
-            readyState: eventSource.readyState,
-            url: eventSource.url,
-            withCredentials: eventSource.withCredentials,
-          });
-        }
-        eventSource.close();
-        setIsStreaming(false);
-        eventSourceRef.current = null;
-      };
-    } catch (error) {
-      debug.error("Error in chat:", error);
-      setIsStreaming(false);
-    }
-  };
 
   const clearHistory = async () => {
     try {
@@ -188,6 +235,18 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           >
             Clear History
           </button>
+          <button
+            onClick={() => setIsTTSEnabled(!isTTSEnabled)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
+          >
+            {isTTSEnabled ? "🔇 Mute TTS" : "🔈 Unmute TTS"}
+          </button>
+          <button
+            onClick={() => setIsSpeechEnabled(!isSpeechEnabled)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
+          >
+            {isSpeechEnabled ? "🎤 Disable Voice" : "🎤 Enable Voice"}
+          </button>
           <div className="ml-auto">
             <RenderLevelSelector />
           </div>
@@ -200,32 +259,40 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           {messages.map((message, index) => (
             <div key={`message-${index}`}>
               {ChatMessageManager.renderMessage({
-                role: message.role,
-                content: message.content,
+                ...message,
                 isLatest: index === messages.length - 1,
               })}
             </div>
           ))}
           <div ref={messagesEndRef} />
         </div>
-        <div className="flex gap-2">
-          <textarea
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !isStreaming) {
-                e.preventDefault();
-                sendMessage();
+        <div className="flex gap-2 p-4 border-t">
+          <div className="flex-1">
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyPress={(e) =>
+                e.key === "Enter" && !isStreaming && sendMessage()
               }
-            }}
-            className="flex-1 p-2 border rounded resize-none"
-            placeholder="Type your message... (Shift+Enter for new line)"
-            disabled={isStreaming}
-            rows={1}
-            style={{ minHeight: "42px" }}
-          />
+              className="w-full p-2 border rounded"
+              placeholder="Type your message..."
+              disabled={isStreaming}
+            />
+          </div>
+
+          {isSpeechEnabled && (
+            <SpeechInput
+              onTranscript={(text) => {
+                setInputText(text);
+              }}
+              sessionId={sessionId}
+              className="flex-shrink-0"
+            />
+          )}
+
           <button
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={isStreaming || !inputText.trim()}
             className="p-2 bg-blue-500 text-white rounded disabled:bg-blue-300"
           >
@@ -233,6 +300,8 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           </button>
         </div>
       </div>
+
+      {isTTSEnabled && <AudioPlayer text={ttsText} />}
     </div>
   );
 }

@@ -1,11 +1,28 @@
 import { useEffect, useState } from "react";
 import { debug } from "@/lib/debug";
+import { StreamChunk } from "@/lib/streamParser";
 
-type MessageContent =
+export type ToolUseContent = {
+  type: "tool_use";
+  tool_use_id: string;
+  content: string;
+};
+
+export type NodeJudgementToolUseCall = {
+  id: string;
+  name: string;
+  type: "tool_use";
+  input: {
+    node_id: number;
+    judgement: string;
+  };
+};
+
+export type MessageContent =
   | { type: "text"; text: string }
-  | { type: "tool_result"; content: string; tool_use_id: string }
-  | { type: "tool_use"; content: string }
-  | { type: "thinking"; text: string };
+  | { type: "thinking"; content: string }
+  | { type: "tool_use"; content: ToolUseContent[]; toolId: string }
+  | { type: "tool_result"; content: string; tool_use_id: string };
 
 export interface ChatMessageProps {
   role: "user" | "assistant";
@@ -39,7 +56,7 @@ const renderThinkingText = (text: string) => {
   let isThinking = false;
 
   return (
-    <div className="whitespace-pre-wrap">
+    <div style={{ whiteSpace: "pre-wrap" }}>
       {parts.map((part, index) => {
         if (part === "<thinking>") {
           isThinking = true;
@@ -58,7 +75,11 @@ const renderThinkingText = (text: string) => {
           );
         }
         return part ? (
-          <span key={index} className={isThinking ? "text-red-500" : ""}>
+          <span
+            key={index}
+            className={isThinking ? "text-red-500" : ""}
+            style={{ whiteSpace: "pre-wrap" }}
+          >
             {part}
           </span>
         ) : null;
@@ -108,6 +129,12 @@ export const ChatMessage = ({
     setDisplayContent(content);
   }, [content]);
 
+  /*debug.log("[ChatMessage] Rendering message:", {
+    role,
+    content: displayContent,
+    isLatest,
+  });*/
+
   if (Array.isArray(displayContent)) {
     return (
       <div className="space-y-2">
@@ -147,20 +174,43 @@ export class ChatMessageManager {
 
   static updateLatestMessage(
     messages: ChatMessageProps[],
-    newContent: string
+    chunks: StreamChunk[]
   ): ChatMessageProps[] {
     if (messages.length === 0) return messages;
 
     const newMessages = [...messages];
     const lastMessage = { ...newMessages[newMessages.length - 1] };
 
+    // Convert chunks to text content and handle escaping
+    const unescapedContent = chunks
+      .map((chunk) => {
+        const content = chunk.content
+          .replace(/\\n/g, "\n")
+          .replace(/\\\\/g, "\\")
+          .replace(/\\\n/g, "\n")
+          .replace(/\\$/g, "");
+
+        // Don't wrap thinking content in tags - they're already in the content
+        return content;
+      })
+      .join("");
+
     if (typeof lastMessage.content === "string") {
-      // Just append the new content without adding closing tags
-      lastMessage.content = lastMessage.content + newContent;
-      return [...newMessages.slice(0, -1), lastMessage];
+      lastMessage.content = lastMessage.content + unescapedContent;
+    } else if (
+      typeof lastMessage.content === "object" &&
+      "type" in lastMessage.content &&
+      lastMessage.content.type === "text"
+    ) {
+      lastMessage.content = {
+        type: "text",
+        text: lastMessage.content.text + unescapedContent,
+      };
+    } else {
+      debug.warn("Unexpected content type:", typeof lastMessage.content);
+      return messages;
     }
 
-    debug.warn("Attempted to update non-string content");
-    return messages;
+    return [...newMessages.slice(0, -1), lastMessage];
   }
 }
