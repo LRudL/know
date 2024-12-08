@@ -73,19 +73,11 @@ export const ChatCard = ({ doc }: { doc: Document }) => {
       {doc.title}
     </Text>
     <Grid style={{gap: "16px"}} columns="3" rows="repeat(1, auto)" width="auto">
-      {!exists ? (
-        <Button
-          disabled={isGenerating}
-          size="1"
-          variant="solid"
-        >
-          {isGenerating ? "Loading..." : "Start"}
-        </Button>
-      ) : graph?.status === "processing" ? (
+      {graph?.status === "processing" ? (
         <Button size="1" variant="solid" disabled={true}>
           Loading...
         </Button>
-      ) : (
+      ) : (graph?.status === "complete" ? (
         <>
           <Button
             onClick={() => router.push(`/graphview/${graph?.id}`)}
@@ -102,7 +94,7 @@ export const ChatCard = ({ doc }: { doc: Document }) => {
             Session
           </Button>
         </>
-      )}
+      ) : null)}
       <Button
         color="ruby"
         onClick={() => handleDeleteDocument()}
