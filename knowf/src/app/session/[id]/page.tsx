@@ -58,6 +58,9 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   const [isSpeechEnabled, setIsSpeechEnabled] = useState(true);
   const [streamParser] = useState(() => new StreamParser());
   const hasInitializedRef = useRef(false);
+  const isInitialLoadRef = useRef(true);
+  const hasCheckedMessagesRef = useRef(false);
+  const isSendingInitialMessageRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -179,28 +182,76 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   };
 
   useEffect(() => {
+    let isActive = true;
+
     async function loadMessages() {
-      if (hasInitializedRef.current) return;
+      debug.log("loadMessages called with refs state:", {
+        hasCheckedMessages: hasCheckedMessagesRef.current,
+        isSendingInitial: isSendingInitialMessageRef.current,
+        isActive,
+      });
 
-      const sessionMessages = await SessionService.getSessionMessages(
-        sessionId
-      );
-      setMessages(
-        sessionMessages.map((msg) => ({
-          role: msg.content.role,
-          content: msg.content.content,
-          isLatest: false,
-        }))
-      );
+      // Don't proceed if we're already sending or component is unmounted
+      if (!isActive) {
+        debug.log("Skipping: Component not active");
+        return;
+      }
+      if (isSendingInitialMessageRef.current) {
+        debug.log("Skipping: Already sending initial message");
+        return;
+      }
 
-      if (sessionMessages.length === 0 && !isStreaming) {
-        console.log("AUTO SENDING INITIAL MESSAGE");
-        hasInitializedRef.current = true;
-        sendMessage("I'm ready to get started.");
+      try {
+        const sessionMessages = await SessionService.getSessionMessages(
+          sessionId
+        );
+        debug.log("Fetched session messages:", sessionMessages.length);
+
+        if (!isActive) return;
+
+        setMessages(
+          sessionMessages.map((msg) => ({
+            role: msg.content.role,
+            content: msg.content.content,
+            isLatest: false,
+          }))
+        );
+
+        // If this is our first check and there are no messages, send initial message
+        if (
+          !hasCheckedMessagesRef.current &&
+          sessionMessages.length === 0 &&
+          !isStreaming
+        ) {
+          debug.log(
+            "No messages found and first check, sending initial message"
+          );
+          hasCheckedMessagesRef.current = true;
+          isSendingInitialMessageRef.current = true;
+          await sendMessage("I'm ready to get started.");
+        }
+
+        // Mark that we've checked messages regardless of result
+        hasCheckedMessagesRef.current = true;
+      } catch (error) {
+        debug.error("Error in initial message load:", error);
+      } finally {
+        if (isActive) {
+          isSendingInitialMessageRef.current = false;
+          debug.log("Finalizing loadMessages with refs state:", {
+            hasCheckedMessages: hasCheckedMessagesRef.current,
+            isSendingInitial: isSendingInitialMessageRef.current,
+          });
+        }
       }
     }
+
     loadMessages();
-  }, [sessionId, isStreaming]);
+
+    return () => {
+      isActive = false;
+    };
+  }, [sessionId]);
 
   if (isLoading) {
     return <div>Loading session...</div>;
