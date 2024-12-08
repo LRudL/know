@@ -30,8 +30,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text }) => {
     if (sentences.length > 0) {
       // Update buffer to keep any remaining incomplete sentence
       const lastChar = textBufferRef.current[textBufferRef.current.length - 1];
+      const lastSentenceBoundary = Math.max(
+        textBufferRef.current.lastIndexOf('.'),
+        textBufferRef.current.lastIndexOf('!'),
+        textBufferRef.current.lastIndexOf('?')
+      );
       textBufferRef.current = /[.!?]/.test(lastChar) ? '' 
-        : textBufferRef.current.slice(textBufferRef.current.lastIndexOf(/[.!?]/));
+        : textBufferRef.current.slice(lastSentenceBoundary + 1);
 
       // Process each complete sentence
       sentences.forEach(sentence => synthesizeSpeech(sentence.trim()));
@@ -49,8 +54,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text }) => {
         body: JSON.stringify({
           input: { text: sentence },
           voice: {
-            languageCode: 'en-US',
-            name: 'en-US-Standard-A',
+            languageCode: 'en-GB',
+            name: 'en-GB-Standard-A',
             ssmlGender: 'FEMALE'
           },
           audioConfig: {
