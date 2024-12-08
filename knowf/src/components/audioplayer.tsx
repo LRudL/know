@@ -19,8 +19,16 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text }) => {
   }, []);
 
   useEffect(() => {
-    if (!text || !audioContextRef.current) return;
+    if (!text) {
+      // debug.log("[AudioPlayer] Received empty text, skipping");
+      return;
+    }
+    if (!audioContextRef.current) {
+      // debug.log("[AudioPlayer] No audio context, skipping");
+      return;
+    }
 
+    // debug.log("[AudioPlayer] Processing text:", text);
     // Append new text to buffer
     textBufferRef.current += text;
 
@@ -48,7 +56,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text }) => {
   const synthesizeSpeech = async (sentence: string) => {
     try {
       // Log the API key presence (not the actual key)
-      debug.log("API Key:", process.env.NEXT_PUBLIC_GOOGLE_API_KEY);
+      // debug.log("API Key:", process.env.NEXT_PUBLIC_GOOGLE_API_KEY);
 
       const response = await fetch(
         "https://texttospeech.googleapis.com/v1/text:synthesize",

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { debug } from "@/lib/debug";
+import { StreamChunk } from "@/lib/streamParser";
 
 export type ToolUseContent = {
   type: "tool_use";
@@ -173,18 +174,26 @@ export class ChatMessageManager {
 
   static updateLatestMessage(
     messages: ChatMessageProps[],
-    newContent: string
+    chunks: StreamChunk[]
   ): ChatMessageProps[] {
     if (messages.length === 0) return messages;
 
     const newMessages = [...messages];
     const lastMessage = { ...newMessages[newMessages.length - 1] };
 
-    const unescapedContent = newContent
-      .replace(/\\n/g, "\n")
-      .replace(/\\\\/g, "\\")
-      .replace(/\\\n/g, "\n")
-      .replace(/\\$/g, "");
+    // Convert chunks to text content and handle escaping
+    const unescapedContent = chunks
+      .map((chunk) => {
+        const content = chunk.content
+          .replace(/\\n/g, "\n")
+          .replace(/\\\\/g, "\\")
+          .replace(/\\\n/g, "\n")
+          .replace(/\\$/g, "");
+
+        // Don't wrap thinking content in tags - they're already in the content
+        return content;
+      })
+      .join("");
 
     if (typeof lastMessage.content === "string") {
       lastMessage.content = lastMessage.content + unescapedContent;

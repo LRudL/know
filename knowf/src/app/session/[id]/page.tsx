@@ -22,6 +22,7 @@ import {
   RenderLevelProvider,
   RenderLevelSelector,
 } from "@/components/ChatMessageRenderLevel";
+import { StreamParser } from "@/lib/streamParser";
 
 export default function ChatSessionWrapper({
   params,
@@ -55,6 +56,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   const [ttsText, setTTSText] = useState<string>("");
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
   const [isSpeechEnabled, setIsSpeechEnabled] = useState(true);
+  const [streamParser] = useState(() => new StreamParser());
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -130,13 +132,19 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           return;
         }
 
+        const chunks = streamParser.parseChunk(event.data);
+
+        // Update messages
         setMessages((prev) =>
-          ChatMessageManager.updateLatestMessage(prev, event.data)
+          ChatMessageManager.updateLatestMessage(prev, chunks)
         );
 
-        if (isTTSEnabled && event.data.trim()) {
-          setTTSText(event.data);
-        }
+        // Only send non-thinking text to TTS
+        chunks
+          .filter((chunk) => chunk.type === "text")
+          .forEach((chunk) => {
+            setTTSText(chunk.content);
+          });
 
         scrollToBottom();
       };
