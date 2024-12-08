@@ -56,36 +56,6 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
   const [isSpeechEnabled, setIsSpeechEnabled] = useState(true);
 
-  useEffect(() => {
-    async function loadMessages() {
-      const sessionMessages = await SessionService.getSessionMessages(
-        sessionId
-      );
-      setMessages(
-        sessionMessages.map((msg) => ({
-          role: msg.content.role,
-          content: msg.content.content,
-          isLatest: false,
-        }))
-      );
-
-      // Auto-send initial message if no messages exist
-      if (sessionMessages.length === 0) {
-        sendMessage("I'm ready to get started.");
-      }
-    }
-    loadMessages();
-  }, [sessionId]);
-
-  if (isLoading) {
-    return <div>Loading session...</div>;
-  }
-
-  if (!session) {
-    return <div>Session not found</div>;
-  }
-
-  // Auto-scroll to bottom when messages update
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -198,6 +168,35 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       ]);
     }
   };
+
+  useEffect(() => {
+    async function loadMessages() {
+      const sessionMessages = await SessionService.getSessionMessages(
+        sessionId
+      );
+      setMessages(
+        sessionMessages.map((msg) => ({
+          role: msg.content.role,
+          content: msg.content.content,
+          isLatest: false,
+        }))
+      );
+
+      // Auto-send initial message if no messages exist
+      if (sessionMessages.length === 0) {
+        sendMessage("I'm ready to get started.");
+      }
+    }
+    loadMessages();
+  }, [sessionId]);
+
+  if (isLoading) {
+    return <div>Loading session...</div>;
+  }
+
+  if (!session) {
+    return <div>Session not found</div>;
+  }
 
   const clearHistory = async () => {
     try {

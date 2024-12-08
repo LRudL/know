@@ -112,11 +112,11 @@ export const ChatMessage = ({
     setDisplayContent(content);
   }, [content]);
 
-  debug.log("[ChatMessage] Rendering message:", {
+  /*debug.log("[ChatMessage] Rendering message:", {
     role,
     content: displayContent,
     isLatest,
-  });
+  });*/
 
   if (Array.isArray(displayContent)) {
     return (
