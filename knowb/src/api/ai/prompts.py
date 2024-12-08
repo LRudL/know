@@ -112,24 +112,32 @@ def format_node_for_session_prompt(node: ContentMapNode) -> str:
     }
     return json.dumps(node_dict, indent=2)
 
+
 async def get_session_system_prompt(chat_session_id: str, client: Client):
-    
+
     # Get document_id from chat_sessions table
     document_id = session_id_to_document_id(chat_session_id, client)
-    
+
     # Get document content
     document_content = get_document_content(document_id, client)
     base64_document_content = base64.b64encode(document_content).decode("utf-8")
-    string_document_content = convert_base64_pdf_to_text(base64_document_content)
-    
+    string_document_content = convert_base64_pdf_to_text(base64_document_content)[:1000]
+
     # Get learning state
     unlocked_nodes = await get_unlocked_nodes(chat_session_id, client)
-    
-    formatted_nodes_to_address = "\n".join(format_node_for_session_prompt(node) for node in unlocked_nodes)
 
-    return SESSION_SYSTEM_PROMPT.format(nodes_to_address=formatted_nodes_to_address, document_content=string_document_content)
+    formatted_nodes_to_address = "\n".join(
+        format_node_for_session_prompt(node) for node in unlocked_nodes
+    )
+
+    return SESSION_SYSTEM_PROMPT.format(
+        nodes_to_address=formatted_nodes_to_address,
+        document_content=string_document_content,
+    )
 
 
 def get_node_complete_prompt(nodes_to_address: list[ContentMapNode]) -> str:
-    formatted_nodes_to_address = "\n".join(format_node_for_session_prompt(node) for node in nodes_to_address)
+    formatted_nodes_to_address = "\n".join(
+        format_node_for_session_prompt(node) for node in nodes_to_address
+    )
     return TOOL_USE_ATTACHMENT.format(nodes_to_address=formatted_nodes_to_address)
