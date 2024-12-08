@@ -25,6 +25,7 @@ import {
 import { Header } from "@/components/Header";
 import { Flex } from "@radix-ui/themes";
 import { StreamParser } from "@/lib/streamParser";
+import { Separator } from "@radix-ui/themes";
 
 export default function ChatSessionWrapper({
   params,
@@ -221,16 +222,21 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <div className="p-4 border-b">
+    <Flex 
+      className="dashboard-background" 
+      style={{  
+        backgroundColor: "var(--color-background)"
+      }} 
+      display="flex" 
+      width="100%" 
+      height="100vh" 
+      direction="column"
+      align="start"
+    >
+      <Header back={true}/>
+      <div className="p-4">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold">Chat Session</h1>
-          <Link
-            href="/dashboard"
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
-          >
-            Back to Dashboard
-          </Link>
           <button
             onClick={clearHistory}
             className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded text-sm transition-colors"
@@ -253,8 +259,8 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
             <RenderLevelSelector />
           </div>
         </div>
-        <p className="text-sm text-gray-500">Session ID: {sessionId}</p>
       </div>
+      <Separator orientation="horizontal" size="4"/>
 
       <div className="flex-1 flex flex-col p-4">
         <div className="flex-1 overflow-y-auto mb-4 space-y-4">
