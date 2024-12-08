@@ -180,6 +180,8 @@ async def handle_chat_stream(message: str, session_id: str, token: str):
             ).__enter__()
 
             for text in stream.text_stream:
+                timestamp = datetime.now().isoformat()
+                print(f"[{timestamp}] Sending chunk: {text}")
                 safe_text = text.replace("\n", "\\n").replace("\\n", "\\\\n")
                 yield f"data: {safe_text}\n\n"
                 await asyncio.sleep(0.1)
