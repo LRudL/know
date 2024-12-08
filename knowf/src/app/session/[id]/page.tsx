@@ -57,6 +57,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
   const [isSpeechEnabled, setIsSpeechEnabled] = useState(true);
   const [streamParser] = useState(() => new StreamParser());
+  const hasInitializedRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -179,6 +180,8 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
 
   useEffect(() => {
     async function loadMessages() {
+      if (hasInitializedRef.current) return;
+
       const sessionMessages = await SessionService.getSessionMessages(
         sessionId
       );
@@ -190,13 +193,14 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
         }))
       );
 
-      // Auto-send initial message if no messages exist
-      if (sessionMessages.length === 0) {
+      if (sessionMessages.length === 0 && !isStreaming) {
+        console.log("AUTO SENDING INITIAL MESSAGE");
+        hasInitializedRef.current = true;
         sendMessage("I'm ready to get started.");
       }
     }
     loadMessages();
-  }, [sessionId]);
+  }, [sessionId, isStreaming]);
 
   if (isLoading) {
     return <div>Loading session...</div>;
