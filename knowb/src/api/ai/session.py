@@ -80,6 +80,7 @@ async def handle_chat_stream(message: str, session_id: str, token: str):
 
     # Combine system prompt with chat history (so we dont have to add the long pdf content to the chat history)
     messages = [system_message] + [msg["content"] for msg in history_response.data]
+    
 
     # Store user message
     user_message = {"role": "user", "content": message}
@@ -98,6 +99,12 @@ async def handle_chat_stream(message: str, session_id: str, token: str):
         raise HTTPException(status_code=500, detail="Failed to create AI message entry")
 
     ai_message_id = ai_msg_response.data[0]["id"]
+    
+    for msg in messages:
+        print(f"[DEBUG] Message: {msg}")
+        print("\n\n")
+
+    print(f"[DEBUG] User message: {user_message}")
 
     try:
         # set up a stream

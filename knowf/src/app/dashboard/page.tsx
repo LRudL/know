@@ -17,8 +17,11 @@ import { UploadCard } from "@/components/UploadCard";
 import { ChatCard } from "@/components/ChatCard";
 import { Header } from "@/components/Header";
 import { Flex, Text, Button, Grid } from "@radix-ui/themes";
-import { ClockIcon, ChatBubbleIcon, CaretRightIcon } from "@radix-ui/react-icons";
-
+import {
+  ClockIcon,
+  ChatBubbleIcon,
+  CaretRightIcon,
+} from "@radix-ui/react-icons";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -108,7 +111,13 @@ function Dashboard() {
     uploadDocument(file);
   };
 
-  const { graph, generateGraph, isGenerating } = useDocumentGraph(documents?.at(-1)?.id);
+  // Get the latest document ID safely
+  const latestDocumentId = documents?.[documents.length - 1]?.id;
+
+  // Only call useDocumentGraph when we have a valid document ID
+  const { graph, generateGraph, isGenerating } = useDocumentGraph(
+    latestDocumentId || null // Pass null instead of undefined
+  );
 
   const [isGeneratingState, setIsGeneratingState] = useState(isGenerating);
 
@@ -124,8 +133,6 @@ function Dashboard() {
     }
   );
 
-  
-
   useEffect(() => {
     if (graph) {
       setIsGeneratingState(false);
@@ -134,32 +141,32 @@ function Dashboard() {
 
   if (loading) {
     return <div>Loading...</div>;
-  } 
+  }
   if (!user) return null;
 
   return (
-    <Flex 
-      className="dashboard-background" 
-      style={{  
-        backgroundColor: "var(--color-background)"
-      }} 
-      display="flex" 
-      width="100%" 
-      height="100vh" 
+    <Flex
+      className="dashboard-background"
+      style={{
+        backgroundColor: "var(--color-background)",
+      }}
+      display="flex"
+      width="100%"
+      height="100vh"
       direction="column"
       align="start"
     >
-      <Header back={false}/>
-      <Flex 
-        className="body" 
+      <Header back={false} />
+      <Flex
+        className="body"
         style={{
-          alignSelf: "stretch"
-        }} 
-        display="flex" 
-        p="7" 
-        direction="column" 
-        align="center" 
-        gap="7" 
+          alignSelf: "stretch",
+        }}
+        display="flex"
+        p="7"
+        direction="column"
+        align="center"
+        gap="7"
         flexGrow="1"
       >
         <Flex
@@ -169,10 +176,10 @@ function Dashboard() {
           align="start"
           gap="5"
         >
-          <Flex 
+          <Flex
             className="pdf-section"
-            display="flex" 
-            direction="column" 
+            display="flex"
+            direction="column"
             align="start"
             gap="5"
           >
@@ -189,10 +196,14 @@ function Dashboard() {
                 Welcome back, Luke
               </Text>
               <Flex display="flex" align="center" gap="3">
-                <ClockIcon width="24" height="24"/>
+                <ClockIcon width="24" height="24" />
                 <Flex display="flex" direction="column">
-                  <Text size="2" weight="regular">It is 2:30 pm in the afternoon.</Text>
-                  <Text size="2" weight="regular">Ready for today's lesson?</Text>
+                  <Text size="2" weight="regular">
+                    It is 2:30 pm in the afternoon.
+                  </Text>
+                  <Text size="2" weight="regular">
+                    Ready for today's lesson?
+                  </Text>
                 </Flex>
               </Flex>
             </Flex>
@@ -208,14 +219,14 @@ function Dashboard() {
           <Flex
             className="chat-history-container"
             style={{
-              alignSelf: "stretch"
+              alignSelf: "stretch",
             }}
             display="flex"
             direction="column"
             justify="end"
             align="start"
             gap="5"
-          >    
+          >
             <Flex
               className="recent-chat-container"
               display="flex"
@@ -231,19 +242,25 @@ function Dashboard() {
                 align="center"
                 gap="3"
               >
-                <ChatBubbleIcon width="16" height="16"/>
-                <Text size="2" weight="regular">Our recent chats</Text>
+                <ChatBubbleIcon width="16" height="16" />
+                <Text size="2" weight="regular">
+                  Our recent chats
+                </Text>
               </Flex>
               <Button color="gray" size="1" variant="ghost">
                 Show all
-                <CaretRightIcon width="16" height="16"/>
+                <CaretRightIcon width="16" height="16" />
               </Button>
             </Flex>
-            <Grid style={{gap: "20px"}} columns="2" rows="repeat(3, 150px)" width="auto">
+            <Grid
+              style={{ gap: "20px" }}
+              columns="2"
+              rows="repeat(3, 150px)"
+              width="auto"
+            >
               {documents.map((doc) => (
-                <ChatCard key={doc.id} doc={doc}/>
-              ))
-              }
+                <ChatCard key={doc.id} doc={doc} />
+              ))}
             </Grid>
           </Flex>
         </Flex>

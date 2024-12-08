@@ -32,18 +32,18 @@ export function useGraph(graphId: string): UseGraphResult {
 }
 
 // For document->graph relationship - used in dashboard
-export function useDocumentGraph(documentId: string) {
+export function useDocumentGraph(documentId: string | undefined | null) {
   const queryClient = useQueryClient();
   const queryKey = ["document-graph", documentId];
 
   const { data: graph, isLoading } = useQuery<KnowledgeGraph | null, Error>({
     queryKey,
-    queryFn: () => KnowledgeGraphService.getGraphForDocument(documentId),
+    queryFn: () => {
+      if (!documentId) return null;
+      return KnowledgeGraphService.getGraphForDocument(documentId);
+    },
+    enabled: !!documentId,
     refetchInterval: (query) => {
-      // debug.log("[Poll] Checking if should continue polling:", {
-      // status: query.state.data?.status,
-      // exists: !!query.state.data,
-      // });
       return query.state.data?.status === "processing" ? 2000 : false;
     },
   });
@@ -53,7 +53,10 @@ export function useDocumentGraph(documentId: string) {
     mutate: generateGraph,
     isPending: isGenerating,
   }: UseMutationResult<string, Error, void> = useMutation({
-    mutationFn: () => KnowledgeGraphService.generateGraph(documentId),
+    mutationFn: () => {
+      if (!documentId) throw new Error("No document ID provided");
+      return KnowledgeGraphService.generateGraph(documentId);
+    },
     onMutate: async () => {
       // Set initial optimistic data
       const newGraph = {
@@ -82,6 +85,7 @@ export function useDocumentGraph(documentId: string) {
     isPending: isDeleting,
   }: UseMutationResult<void, Error, void> = useMutation({
     mutationFn: async () => {
+      if (!documentId) throw new Error("No document ID provided");
       if (!graph?.id) throw new Error("No graph to delete");
       await KnowledgeGraphService.deleteGraphByDocumentId(documentId);
       await new Promise((resolve) => setTimeout(resolve, 400));
