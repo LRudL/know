@@ -1,11 +1,11 @@
 "use client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { debug } from "@/lib/debug";
 import { supabase } from "@/lib/supabase";
-import { Document } from "@/lib/documentService";
-import { DocumentActions } from "@/components/DocumentActions";
+import { DocumentService } from "@/lib/documentService";
+import { useDocumentGraph } from "@/hooks/useKnowledgeGraph";
 import {
   QueryClient,
   QueryClientProvider,
@@ -13,15 +13,14 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
+import { UploadCard } from "@/components/UploadCard";
+import { ChatCard } from "@/components/ChatCard";
+import { Flex, Text, Button, Separator, Grid } from "@radix-ui/themes";
+import { ClockIcon, ChatBubbleIcon, CaretRightIcon } from "@radix-ui/react-icons";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 0, // Consider all data stale immediately
-      refetchOnWindowFocus: true,
-    },
-  },
-});
+
+// Create a client
+const queryClient = new QueryClient();
 
 // Wrap the dashboard content
 export default function DashboardWrapper() {
@@ -47,9 +46,10 @@ async function fetchDocuments(userId: string | undefined) {
 }
 
 function Dashboard() {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: documents = [] } = useQuery({
@@ -93,6 +93,7 @@ function Dashboard() {
     },
     onSettled: () => {
       setUploading(false);
+      setUploaded(true);
     },
   });
 
@@ -106,73 +107,183 @@ function Dashboard() {
     uploadDocument(file);
   };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      debug.log("Signed out successfully, redirecting to login");
-    } catch (error) {
-      debug.error("Error during sign out process:", error);
-    } finally {
-      // Always redirect to login
-      router.push("/login");
-    }
-  };
+  const { graph, generateGraph, isGenerating } = useDocumentGraph(documents?.at(-1)?.id);
 
-  if (loading) return <div>Loading...</div>;
+  const [isGeneratingState, setIsGeneratingState] = useState(isGenerating);
+
+  const { mutate: deleteDocument, isPending: isDeletingDocument } = useMutation(
+    {
+      mutationFn: () => DocumentService.deleteDocument(documents?.at(-1)?.id),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["documents"] });
+      },
+      onError: (error) => {
+        debug.error("Error deleting document:", error);
+      },
+    }
+  );
+
+  useEffect(() => {
+    if (graph) {
+      setIsGeneratingState(false);
+    }
+  }, [graph]);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  } 
   if (!user) return null;
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <div className="flex gap-4">
-          <button
-            onClick={() => router.push("/session")}
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent px-4 py-2"
+    <Flex 
+      className="dashboard-background" 
+      style={{  
+        backgroundColor: "var(--color-background)"
+      }} 
+      display="flex" 
+      width="100%" 
+      height="100vh" 
+      direction="column"
+      align="start"
+    >
+      <header
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "start",
+          width: "100%"
+        }}
+      >
+        <Flex
+          className="header-container"
+          style={{
+            backgroundColor: "var(--accent-9)"
+          }}
+          display="flex"
+          width="100%"
+          height="var(--space-9)"
+          pl="7"
+          align="center"
+          gap="7"
+        >
+          <Text style={{color: "white"}} size="5" weight="bold">
+            Socractic
+          </Text>
+          <Flex className="menu-bar-container" 
+            display="flex" 
+            py="3" 
+            justify="end" 
+            align="center" 
+            gap="3" 
+            flexGrow="1"
           >
-            Chat
-          </button>
-          <button
-            onClick={() => router.push("/settings")}
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent px-4 py-2"
+            <Flex className="menu-bar" display="flex" px="5" py="1" align="start">
+              <Button size="2" variant="solid">Settings</Button>
+              <Button size="2" variant="solid">Support</Button>
+              <Button size="2" variant="solid">Sign Out</Button>
+            </Flex>
+          </Flex>
+        </Flex>
+        <Separator orientation="horizontal" size="4"/>
+      </header>
+      <Flex 
+        className="body" 
+        style={{
+          alignSelf: "stretch"
+        }} 
+        display="flex" 
+        p="7" 
+        direction="column" 
+        align="center" 
+        gap="7" 
+        flexGrow="1"
+      >
+        <Flex
+          className="body-container"
+          display="flex"
+          maxWidth="940px"
+          align="start"
+          gap="5"
+        >
+          <Flex 
+            className="pdf-section"
+            display="flex" 
+            direction="column" 
+            align="start"
+            gap="5"
           >
-            Settings
-          </button>
-          <button
-            onClick={handleSignOut}
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent px-4 py-2"
-          >
-            Sign Out
-          </button>
-        </div>
-      </div>
-      <p>Welcome, {user.email}</p>
-      <p className="text-sm text-gray-500">User ID: {user.id}</p>
-
-      <div className="mb-8">
-        <input type="file" onChange={handleFileUpload} />
-        {uploading && <p>Uploading...</p>}
-      </div>
-
-      <div>
-        <h2 className="text-xl font-semibold">Uploaded Documents</h2>
-        <table className="min-w-full border-collapse border border-gray-200">
-          <thead>
-            <tr>
-              <th className="border border-gray-300 p-2">Document Title</th>
-              <th className="border border-gray-300 p-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {documents.map((doc) => (
-              <tr key={doc.id}>
-                <td className="border border-gray-300 p-2">{doc.title}</td>
-                <DocumentActions doc={doc} />
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            <Flex
+              className="title"
+              display="flex"
+              maxWidth="300px"
+              direction="column"
+              justify="center"
+              align="start"
+              gap="3"
+            >
+              <Text size="6" weight="regular">
+                Welcome back, Luke
+              </Text>
+              <Flex display="flex" align="center" gap="3">
+                <ClockIcon width="24" height="24"/>
+                <Flex display="flex" direction="column">
+                  <Text size="2" weight="regular">It is 2:30 pm in the afternoon.</Text>
+                  <Text size="2" weight="regular">Ready for today's lesson?</Text>
+                </Flex>
+              </Flex>
+            </Flex>
+            <UploadCard
+              uploading={uploading}
+              uploaded={uploaded}
+              documents={documents}
+              isGeneratingState={isGeneratingState}
+              handleFileUpload={handleFileUpload}
+              handleStartSession={() => generateGraph()}
+            />
+          </Flex>
+          <Flex
+            className="chat-history-container"
+            style={{
+              alignSelf: "stretch"
+            }}
+            display="flex"
+            direction="column"
+            justify="end"
+            align="start"
+            gap="5"
+          >    
+            <Flex
+              className="recent-chat-container"
+              display="flex"
+              width="615px"
+              height="var(--space-5)"
+              justify="between"
+              align="center"
+            >
+              <Flex
+                className="our-recent-chats"
+                display="flex"
+                justify="center"
+                align="center"
+                gap="3"
+              >
+                <ChatBubbleIcon width="16" height="16"/>
+                <Text size="2" weight="regular">Our recent chats</Text>
+              </Flex>
+              <Button color="gray" size="1" variant="ghost">
+                Show all
+                <CaretRightIcon width="16" height="16"/>
+              </Button>
+            </Flex>
+            <Grid style={{gap: "20px"}} columns="2" rows="repeat(3, 150px)" width="auto">
+              {documents.map((doc) => (
+                <ChatCard key={doc.id} doc={doc}/>
+              ))
+              }
+            </Grid>
+          </Flex>
+        </Flex>
+      </Flex>
+    </Flex>
   );
 }

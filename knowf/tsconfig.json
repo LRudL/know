@@ -20,7 +20,8 @@
       }
     ],
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"],
+      "@shadcn/*": ["src/components/shadcn/*"]
     },
     "declaration": true,
     "declarationMap": true,

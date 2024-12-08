@@ -25,6 +25,9 @@ import { MockReview } from "@/components/MockReview";
 import { LearningService, SpacedRepState } from "@/lib/learningService";
 import { dateService } from "@/lib/date";
 import { NodeReviewStateVisualization } from "@/components/NodeReviewStateVisualization";
+import { Header } from "@/components/Header";
+import { Flex, Text, Button, Separator, Grid } from "@radix-ui/themes";
+import { ClockIcon, ChatBubbleIcon, CaretRightIcon } from "@radix-ui/react-icons";
 
 console.log("React version:", React.version);
 console.log("Node version:", process.version);
@@ -249,7 +252,18 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
   };
 
   return (
-    <div style={{ width: "100vw", height: "100vh" }} className="relative">
+    <Flex
+      className="graph-background"
+      style={{  
+        backgroundColor: "var(--color-background)"
+      }} 
+      display="flex"
+      width="100%"
+      height="100vh"
+      direction="column"
+      align="start"
+    >
+      <Header />
       <ReactFlow
         nodes={elements.nodes}
         edges={elements.edges}
@@ -269,27 +283,6 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
         }}
         fitView
       >
-        <Panel position="top-left">
-          <div className="bg-white p-4 rounded shadow">
-            <div className="flex items-center gap-4">
-              <h2 className="text-xl font-bold">Knowledge Map</h2>
-              <Link
-                href="/dashboard"
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
-              >
-                Back to Dashboard
-              </Link>
-              <button
-                onClick={() => refetch()}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
-              >
-                Refresh Learning State
-              </button>
-              <MockDate />
-            </div>
-            <p className="text-sm text-gray-600 mt-2">Graph ID: {graphId}</p>
-          </div>
-        </Panel>
       </ReactFlow>
 
       {/* Info Panel */}
@@ -333,6 +326,6 @@ function KnowledgeMapContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
         </div>
       </div>
-    </div>
+    </Flex>
   );
 }
