@@ -124,6 +124,8 @@ function Dashboard() {
     }
   );
 
+  
+
   useEffect(() => {
     if (graph) {
       setIsGeneratingState(false);

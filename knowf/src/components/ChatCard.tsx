@@ -75,7 +75,6 @@ export const ChatCard = ({ doc }: { doc: Document }) => {
     <Grid style={{gap: "16px"}} columns="3" rows="repeat(1, auto)" width="auto">
       {!exists ? (
         <Button
-          onClick={() => generateGraph()}
           disabled={isGenerating}
           size="1"
           variant="solid"
