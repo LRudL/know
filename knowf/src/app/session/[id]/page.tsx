@@ -26,9 +26,16 @@ type ViewMode = "debug" | "chat" | "voice-only";
 interface ViewSelectorProps {
   currentMode: ViewMode;
   onChange: (mode: ViewMode) => void;
+  isTTSEnabled: boolean;
+  onTTSToggle: () => void;
 }
 
-function ViewSelector({ currentMode, onChange }: ViewSelectorProps) {
+function ViewSelector({
+  currentMode,
+  onChange,
+  isTTSEnabled,
+  onTTSToggle,
+}: ViewSelectorProps) {
   return (
     <div className="flex gap-2">
       {(["debug", "voice-only"] as ViewMode[]).map((mode) => (
@@ -44,6 +51,12 @@ function ViewSelector({ currentMode, onChange }: ViewSelectorProps) {
           {mode.charAt(0).toUpperCase() + mode.slice(1)}
         </button>
       ))}
+      <button
+        onClick={onTTSToggle}
+        className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
+      >
+        {isTTSEnabled ? "🔇 Mute TTS" : "🔈 Unmute TTS"}
+      </button>
     </div>
   );
 }
@@ -57,7 +70,7 @@ interface ChatViewProps {
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
-function DebugView(props: ChatViewProps) {
+function DebugView(props: ChatViewProps & { sessionId: string }) {
   return (
     <div className="w-full flex flex-col">
       <div className="flex-1 overflow-y-auto p-4">
@@ -74,12 +87,12 @@ function DebugView(props: ChatViewProps) {
           <div ref={props.messagesEndRef} />
         </div>
       </div>
-      <ChatInput {...props} />
+      <ChatInput {...props} sessionId={props.sessionId} />
     </div>
   );
 }
 
-function ChatView(props: ChatViewProps) {
+function ChatView(props: ChatViewProps & { sessionId: string }) {
   return (
     <div className="w-full flex flex-col">
       <div className="flex-1 overflow-y-auto p-4">
@@ -96,7 +109,7 @@ function ChatView(props: ChatViewProps) {
           <div ref={props.messagesEndRef} />
         </div>
       </div>
-      <ChatInput {...props} />
+      <ChatInput {...props} sessionId={props.sessionId} />
     </div>
   );
 }
@@ -125,7 +138,8 @@ function ChatInput({
   setInputText,
   sendMessage,
   isStreaming,
-}: Partial<ChatViewProps>) {
+  sessionId,
+}: Partial<ChatViewProps> & { sessionId: string }) {
   return (
     <div className="flex gap-2 p-4 border-t">
       <div className="flex-1">
@@ -144,6 +158,17 @@ function ChatInput({
           disabled={isStreaming}
         />
       </div>
+      <VoiceButton
+        onTranscript={(text) => {
+          setInputText?.(text);
+        }}
+        sessionId={sessionId}
+        size="small"
+        onSend={(text) => {
+          sendMessage?.(text);
+          setInputText?.("");
+        }}
+      />
       <button
         onClick={() => {
           sendMessage?.(inputText || "");
@@ -184,8 +209,13 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   } = useChat(sessionId);
   const [inputText, setInputText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [isTTSEnabled, setIsTTSEnabled] = useState(true);
+  const [ttsEnabled, setTTSEnabled] = useState(true);
+  const [ttsError, setTTSError] = useState<Error | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("debug");
+  const [needsAudioActivation, setNeedsAudioActivation] = useState(false);
+  const [audioActivateHandler, setAudioActivateHandler] = useState<
+    (() => Promise<void>) | null
+  >(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -202,6 +232,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
     sendMessage,
     isStreaming,
     messagesEndRef,
+    sessionId,
   };
 
   return (
@@ -218,18 +249,22 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
       <Header back={true} />
       <div className="px-10 py-5">
         <div className="flex items-center gap-4">
-          <ViewSelector currentMode={viewMode} onChange={setViewMode} />
+          <ViewSelector
+            currentMode={viewMode}
+            onChange={setViewMode}
+            isTTSEnabled={ttsEnabled}
+            onTTSToggle={() => setTTSEnabled(!ttsEnabled)}
+          />
+          {ttsError && (
+            <span className="text-red-500 text-sm">
+              TTS Error: {ttsError.message}
+            </span>
+          )}
           <button
             onClick={clearHistory}
             className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded text-sm transition-colors"
           >
             Clear History
-          </button>
-          <button
-            onClick={() => setIsTTSEnabled(!isTTSEnabled)}
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
-          >
-            {isTTSEnabled ? "🔇 Mute TTS" : "🔈 Unmute TTS"}
           </button>
         </div>
       </div>
@@ -243,7 +278,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
         )}
       </div>
 
-      {isTTSEnabled && <AudioPlayer text={ttsText} />}
+      {ttsEnabled && <AudioPlayer text={ttsText} onError={setTTSError} />}
     </Flex>
   );
 }

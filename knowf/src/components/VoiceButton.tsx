@@ -7,7 +7,7 @@ interface VoiceButtonProps {
   onTranscript: (text: string) => void;
   sessionId: string;
   size?: "small" | "large";
-  onSend?: (text: string) => void; // Optional callback for direct sending
+  onSend?: (text: string) => void;
 }
 
 export function VoiceButton({
@@ -66,7 +66,7 @@ export function VoiceButton({
             : "bg-[var(--accent-9)] hover:bg-[var(--accent-10)]"
         } ${styles.text}`}
         buttonStyle={baseStyle}
-        buttonText={isRecording ? "Click to Send" : "Click to Speak"}
+        buttonText={isRecording ? "↑" : "🎤"}
         isRecording={isRecording}
         onRecordingStateChange={setIsRecording}
       />
