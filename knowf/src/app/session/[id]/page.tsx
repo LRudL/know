@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-//import { use } from 'react';
 import { debug } from "@/lib/debug";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { EventSourcePolyfill } from "event-source-polyfill";
 import { useSession } from "@/hooks/useSession";
 import { SessionService, ChatMessageContent } from "@/lib/sessionService";
 import QueryProvider from "@/providers/query-provider";
@@ -19,9 +17,9 @@ import {
 } from "@/components/ChatMessage";
 import { Header } from "@/components/Header";
 import { Flex } from "@radix-ui/themes";
-import { StreamParser } from "@/lib/streamParser";
 import { Separator } from "@radix-ui/themes";
 import { VoiceButton } from "@/components/VoiceButton";
+import { useChat } from "@/hooks/useChat";
 
 export default function ChatSessionWrapper({
   params,
@@ -36,26 +34,16 @@ export default function ChatSessionWrapper({
 }
 
 function ChatSession({ params }: { params: Promise<{ id: string }> }) {
-  // START UNDELETABLE COMMENTS
-  // VERY IMPORTANT: This is needed in the new React version:
   const unwrappedParams = React.use(params);
-  // we CANNOT just use params.id because it's a Promise
-  // do not change this OR the these comments
-  // END UNDELETABLE COMMENTS
-
   const sessionId = unwrappedParams.id;
   const { data: session, isLoading, error } = useSession(sessionId);
-  const [messages, setMessages] = useState<ChatMessageProps[]>([]);
+  const { messages, isStreaming, ttsText, sendMessage, clearHistory } =
+    useChat(sessionId);
   const [inputText, setInputText] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
-  const eventSourceRef = useRef<EventSourcePolyfill | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [ttsText, setTTSText] = useState<string>("");
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
   const [isSpeechEnabled, setIsSpeechEnabled] = useState(true);
-  const [streamParser] = useState(() => new StreamParser());
   const hasInitializedRef = useRef(false);
-  const isInitialLoadRef = useRef(true);
   const hasCheckedMessagesRef = useRef(false);
   const isSendingInitialMessageRef = useRef(false);
 
@@ -63,161 +51,16 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const sendMessage = async (messageText: string = inputText) => {
-    if (!messageText.trim()) return;
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("No auth session");
-
-    debug.log("Starting new message stream");
-
-    // Add user message
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "user",
-        content: messageText.trim(),
-        isLatest: false,
-      },
-    ]);
-
-    setInputText("");
-    setIsStreaming(true);
-
-    // Add initial AI message
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "assistant",
-        content: "",
-        isLatest: true,
-      },
-    ]);
-
-    try {
-      debug.log("Creating EventSource connection");
-      const eventSource = new EventSourcePolyfill(
-        `/api/chat/stream?message=${encodeURIComponent(
-          messageText.trim()
-        )}&session_id=${sessionId}`,
-        {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }
-      );
-      eventSourceRef.current = eventSource;
-
-      eventSource.onmessage = (event) => {
-        if (event.data === "[END]") {
-          debug.log("Received end of stream signal");
-          eventSource.close();
-          setIsStreaming(false);
-          eventSourceRef.current = null;
-          return;
-        }
-
-        if (event.data.startsWith("Error:")) {
-          debug.error("Received error from stream:", event.data);
-          setMessages((prev) => [
-            ...prev.slice(0, -1),
-            {
-              role: "assistant",
-              content: "Sorry, an error occurred. Please try again.",
-              isLatest: true,
-            },
-          ]);
-          eventSource.close();
-          setIsStreaming(false);
-          eventSourceRef.current = null;
-          return;
-        }
-
-        const chunks = streamParser.parseChunk(event.data);
-
-        // Update messages
-        setMessages((prev) =>
-          ChatMessageManager.updateLatestMessage(prev, chunks)
-        );
-
-        // Only send non-thinking text to TTS
-        chunks
-          .filter((chunk) => chunk.type === "text")
-          .forEach((chunk) => {
-            setTTSText(chunk.content);
-          });
-
-        scrollToBottom();
-      };
-
-      eventSource.onerror = (error) => {
-        debug.error("EventSource error:", error);
-        eventSource.close();
-        setIsStreaming(false);
-        eventSourceRef.current = null;
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "Sorry, an error occurred. Please try again.",
-            isLatest: true,
-          },
-        ]);
-      };
-    } catch (error) {
-      debug.error("Error in chat:", error);
-      setIsStreaming(false);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "Sorry, an error occurred. Please try again.",
-          isLatest: true,
-        },
-      ]);
-    }
-  };
-
   useEffect(() => {
     let isActive = true;
 
     async function loadMessages() {
-      debug.log("loadMessages called with refs state:", {
-        hasCheckedMessages: hasCheckedMessagesRef.current,
-        isSendingInitial: isSendingInitialMessageRef.current,
-        isActive,
-      });
-
-      // Don't proceed if we're already sending or component is unmounted
-      if (!isActive) {
-        debug.log("Skipping: Component not active");
-        return;
-      }
-      if (isSendingInitialMessageRef.current) {
-        debug.log("Skipping: Already sending initial message");
-        return;
-      }
+      if (!isActive || isSendingInitialMessageRef.current) return;
 
       try {
-        const sessionMessages = await SessionService.getSessionMessages(
-          sessionId
-        );
-        debug.log("Fetched session messages:", sessionMessages.length);
-
-        if (!isActive) return;
-
-        setMessages(
-          sessionMessages.map((msg) => ({
-            role: msg.content.role,
-            content: msg.content.content,
-            isLatest: false,
-          }))
-        );
-
-        // If this is our first check and there are no messages, send initial message
         if (
           !hasCheckedMessagesRef.current &&
-          sessionMessages.length === 0 &&
+          messages.length === 0 &&
           !isStreaming
         ) {
           debug.log(
@@ -227,38 +70,25 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           isSendingInitialMessageRef.current = true;
           await sendMessage("I'm ready to get started.");
         }
-
-        // Mark that we've checked messages regardless of result
         hasCheckedMessagesRef.current = true;
       } catch (error) {
         debug.error("Error in initial message load:", error);
       } finally {
         if (isActive) {
           isSendingInitialMessageRef.current = false;
-          debug.log("Finalizing loadMessages with refs state:", {
-            hasCheckedMessages: hasCheckedMessagesRef.current,
-            isSendingInitial: isSendingInitialMessageRef.current,
-          });
         }
       }
     }
 
     loadMessages();
-
     return () => {
       isActive = false;
     };
-  }, [sessionId]);
+  }, [sessionId, messages.length, isStreaming, sendMessage]);
 
   useEffect(() => {
-    return () => {
-      // Cleanup on unmount
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-    };
-  }, []);
+    scrollToBottom();
+  }, [messages]);
 
   if (isLoading) {
     return <div>Loading session...</div>;
@@ -271,18 +101,6 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   if (!session) {
     return <div>Session not found</div>;
   }
-
-  const clearHistory = async () => {
-    try {
-      await SessionService.clearSessionMessages(sessionId);
-      setMessages([]);
-      debug.log("Chat history cleared successfully");
-    } catch (error) {
-      debug.error("Full error stack in clearHistory:", error);
-      console.error("Complete error:", error);
-      alert(`Failed to clear chat history: ${(error as Error).message}`);
-    }
-  };
 
   return (
     <Flex
@@ -345,16 +163,22 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={(e) =>
-                  e.key === "Enter" && !isStreaming && sendMessage()
-                }
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !isStreaming && inputText.trim()) {
+                    sendMessage(inputText);
+                    setInputText("");
+                  }
+                }}
                 className="w-full p-2 border rounded"
                 placeholder="Type your message..."
                 disabled={isStreaming}
               />
             </div>
             <button
-              onClick={() => sendMessage()}
+              onClick={() => {
+                sendMessage(inputText);
+                setInputText("");
+              }}
               disabled={isStreaming || !inputText.trim()}
               className="p-2 bg-blue-500 text-white rounded disabled:bg-blue-300"
             >

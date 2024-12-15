@@ -9,8 +9,8 @@ export function useChat(sessionId: string) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [ttsText, setTTSText] = useState("");
 
-  const sendMessage = async (messageText: string) => {
-    if (!messageText.trim()) return;
+  const sendMessage = async (messageText?: string) => {
+    if (!messageText?.trim()) return;
 
     // Add user message and initial AI message
     setMessages((prev) => [
