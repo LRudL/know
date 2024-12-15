@@ -37,60 +37,28 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = React.use(params);
   const sessionId = unwrappedParams.id;
   const { data: session, isLoading, error } = useSession(sessionId);
-  const { messages, isStreaming, ttsText, sendMessage, clearHistory } =
-    useChat(sessionId);
+  const {
+    messages,
+    isStreaming,
+    ttsText,
+    sendMessage,
+    clearHistory,
+    isLoadingMessages,
+  } = useChat(sessionId);
   const [inputText, setInputText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
   const [isSpeechEnabled, setIsSpeechEnabled] = useState(true);
-  const hasInitializedRef = useRef(false);
-  const hasCheckedMessagesRef = useRef(false);
-  const isSendingInitialMessageRef = useRef(false);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    let isActive = true;
-
-    async function loadMessages() {
-      if (!isActive || isSendingInitialMessageRef.current) return;
-
-      try {
-        if (
-          !hasCheckedMessagesRef.current &&
-          messages.length === 0 &&
-          !isStreaming
-        ) {
-          debug.log(
-            "No messages found and first check, sending initial message"
-          );
-          hasCheckedMessagesRef.current = true;
-          isSendingInitialMessageRef.current = true;
-          await sendMessage("I'm ready to get started.");
-        }
-        hasCheckedMessagesRef.current = true;
-      } catch (error) {
-        debug.error("Error in initial message load:", error);
-      } finally {
-        if (isActive) {
-          isSendingInitialMessageRef.current = false;
-        }
-      }
-    }
-
-    loadMessages();
-    return () => {
-      isActive = false;
-    };
-  }, [sessionId, messages.length, isStreaming, sendMessage]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  if (isLoading) {
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  if (isLoading || isLoadingMessages) {
     return <div>Loading session...</div>;
   }
 

@@ -1,13 +1,38 @@
 import { ChatMessageManager, ChatMessageProps } from "@/components/ChatMessage";
 import { debug } from "@/lib/debug";
 import { SessionService } from "@/lib/sessionService";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // hooks/useChat.ts
 export function useChat(sessionId: string) {
   const [messages, setMessages] = useState<ChatMessageProps[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [ttsText, setTTSText] = useState("");
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
+
+  useEffect(() => {
+    async function loadExistingMessages() {
+      try {
+        const existingMessages = await SessionService.getSessionMessages(
+          sessionId
+        );
+        if (existingMessages.length > 0) {
+          const formattedMessages = existingMessages.map((msg, index) => ({
+            role: msg.content.role,
+            content: msg.content.content,
+            isLatest: index === existingMessages.length - 1,
+          }));
+          setMessages(formattedMessages);
+        }
+      } catch (error) {
+        debug.error("Error loading existing messages:", error);
+      } finally {
+        setIsLoadingMessages(false);
+      }
+    }
+
+    loadExistingMessages();
+  }, [sessionId]);
 
   const sendMessage = async (messageText?: string) => {
     if (!messageText?.trim()) return;
@@ -56,5 +81,6 @@ export function useChat(sessionId: string) {
     ttsText,
     sendMessage,
     clearHistory: () => SessionService.clearSessionMessages(sessionId),
+    isLoadingMessages,
   };
 }
