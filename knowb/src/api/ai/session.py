@@ -84,6 +84,7 @@ async def handle_chat_stream(message: str, session_id: str, token: str):
 
     # Get system prompt
     system_prompt = await get_session_system_prompt(session_id, supabase)
+    system_prompt = system_prompt[:100]
     system_message = {"role": "user", "content": system_prompt}
 
     # Combine system prompt with chat history (so we dont have to add the long pdf content to the chat history)
