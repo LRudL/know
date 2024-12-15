@@ -42,7 +42,7 @@ export function Header({back} : {back: boolean}) {
         gap="7"
       >
         <Text style={{color: "white"}} size="5" weight="bold">
-          Socractic
+          Robinson
         </Text>
         <Flex className="menu-bar-container" 
           display="flex" 
