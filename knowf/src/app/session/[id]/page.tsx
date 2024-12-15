@@ -31,7 +31,7 @@ interface ViewSelectorProps {
 function ViewSelector({ currentMode, onChange }: ViewSelectorProps) {
   return (
     <div className="flex gap-2">
-      {(["debug", "chat", "voice-only"] as ViewMode[]).map((mode) => (
+      {(["debug", "voice-only"] as ViewMode[]).map((mode) => (
         <button
           key={mode}
           onClick={() => onChange(mode)}
@@ -185,7 +185,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   const [inputText, setInputText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>("chat");
+  const [viewMode, setViewMode] = useState<ViewMode>("debug");
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

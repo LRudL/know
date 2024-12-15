@@ -100,13 +100,17 @@ const contentRenderers = {
     content: { content: string; tool_use_id: string },
     showDebugInfo: boolean
   ) => (showDebugInfo ? renderToolResult(content) : null),
-  tool_use: (content: { content: string }, showDebugInfo: boolean) =>
-    showDebugInfo ? (
+  tool_use: (content: any, showDebugInfo: boolean) => {
+    if (!showDebugInfo) return null;
+
+    return (
       <div className="whitespace-pre-wrap">
-        <div className="text-xs text-gray-500">Tool Use:</div>
-        {content.content}
+        {typeof content === "string"
+          ? content
+          : JSON.stringify(content, null, 2)}
       </div>
-    ) : null,
+    );
+  },
   raw: (text: string, showDebugInfo: boolean) =>
     renderThinkingText(text, showDebugInfo),
 };
