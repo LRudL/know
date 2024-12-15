@@ -310,7 +310,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           className={`w-[300px] h-[300px] rounded-full transition-colors flex items-center justify-center text-white text-4xl font-bold cursor-pointer ${
             isRecording
               ? "bg-red-500 hover:bg-red-600"
-              : "bg-blue-500 hover:bg-blue-600"
+              : "bg-[var(--accent-9)] hover:bg-[var(--accent-10)]"
           }`}
           buttonStyle={baseStyle}
           buttonText={isRecording ? "Click to Send" : "Click to Speak"}

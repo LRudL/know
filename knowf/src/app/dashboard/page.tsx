@@ -13,7 +13,6 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { UploadCard } from "@/components/UploadCard";
 import { ChatCard } from "@/components/ChatCard";
 import { Header } from "@/components/Header";
 import { Flex, Text, Button, Grid } from "@radix-ui/themes";
@@ -22,6 +21,7 @@ import {
   ChatBubbleIcon,
   CaretRightIcon,
 } from "@radix-ui/react-icons";
+import { UploadButton } from "@/components/UploadButton";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -108,7 +108,12 @@ function Dashboard() {
     if (!file) return;
 
     setUploading(true);
-    uploadDocument(file);
+    try {
+      uploadDocument(file);
+    } catch (error) {
+      debug.error("Error uploading file:", error);
+      setUploading(false);
+    }
   };
 
   // Get the latest document ID safely
@@ -139,6 +144,17 @@ function Dashboard() {
     }
   }, [graph]);
 
+  const handleStartSession = async () => {
+    if (!latestDocumentId) return;
+
+    setIsGeneratingState(true);
+    try {
+      await generateGraph();
+    } catch (error) {
+      debug.error("Error generating graph:", error);
+    }
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -146,123 +162,61 @@ function Dashboard() {
 
   return (
     <Flex
-      className="dashboard-background"
-      style={{
-        backgroundColor: "var(--color-background)",
-      }}
-      display="flex"
-      width="100%"
-      height="100vh"
       direction="column"
-      align="start"
+      width="100%"
+      style={{ backgroundColor: "var(--color-background)" }}
     >
       <Header back={false} />
       <Flex
-        className="body"
-        style={{
-          alignSelf: "stretch",
-        }}
-        display="flex"
-        p="7"
         direction="column"
         align="center"
-        gap="7"
-        flexGrow="1"
+        gap="4"
+        p="4"
+        style={{
+          maxWidth: "100%",
+          margin: "0 auto",
+          paddingTop: "var(--space-6)",
+        }}
       >
+        {/* Welcome Text */}
         <Flex
-          className="body-container"
-          display="flex"
-          maxWidth="940px"
-          align="start"
-          gap="5"
+          direction="column"
+          align="center"
+          gap="2"
+          style={{
+            maxWidth: "600px",
+            width: "100%",
+            marginBottom: "var(--space-4)",
+          }}
         >
-          <Flex
-            className="pdf-section"
-            display="flex"
-            direction="column"
-            align="start"
-            gap="5"
-          >
-            <Flex
-              className="title"
-              display="flex"
-              maxWidth="300px"
-              direction="column"
-              justify="center"
-              align="start"
-              gap="3"
-            >
-              <Text size="6" weight="regular">
-                Welcome back, Luke
-              </Text>
-              <Flex display="flex" align="center" gap="3">
-                <ClockIcon width="24" height="24" />
-                <Flex display="flex" direction="column">
-                  <Text size="2" weight="regular">
-                    It is 2:30 pm in the afternoon.
-                  </Text>
-                  <Text size="2" weight="regular">
-                    Ready for today's lesson?
-                  </Text>
-                </Flex>
-              </Flex>
-            </Flex>
-            <UploadCard
-              uploading={uploading}
-              uploaded={uploaded}
-              documents={documents}
-              isGeneratingState={isGeneratingState}
-              handleFileUpload={handleFileUpload}
-              handleStartSession={() => generateGraph()}
-            />
+          <Text size="6" weight="regular">
+            Welcome back
+          </Text>
+          <Flex align="center" gap="2">
+            <ClockIcon width="20" height="20" />
+            <Text size="2">Ready for today's lesson?</Text>
           </Flex>
-          <Flex
-            className="chat-history-container"
-            style={{
-              alignSelf: "stretch",
-            }}
-            display="flex"
-            direction="column"
-            justify="end"
-            align="start"
-            gap="5"
-          >
-            <Flex
-              className="recent-chat-container"
-              display="flex"
-              width="615px"
-              height="var(--space-5)"
-              justify="between"
-              align="center"
-            >
-              <Flex
-                className="our-recent-chats"
-                display="flex"
-                justify="center"
-                align="center"
-                gap="3"
-              >
-                <ChatBubbleIcon width="16" height="16" />
-                <Text size="2" weight="regular">
-                  Our recent chats
-                </Text>
-              </Flex>
-              <Button color="gray" size="1" variant="ghost">
-                Show all
-                <CaretRightIcon width="16" height="16" />
-              </Button>
-            </Flex>
-            <Grid
-              style={{ gap: "20px" }}
-              columns="2"
-              rows="repeat(3, 150px)"
-              width="auto"
-            >
-              {documents.map((doc) => (
-                <ChatCard key={doc.id} doc={doc} />
-              ))}
-            </Grid>
-          </Flex>
+        </Flex>
+
+        {/* Upload Button with all necessary props */}
+        <UploadButton
+          uploading={uploading}
+          uploaded={uploaded}
+          documents={documents}
+          isGeneratingState={isGeneratingState}
+          onUpload={handleFileUpload}
+          onStartSession={handleStartSession}
+        />
+
+        {/* Documents List */}
+        <Flex
+          direction="column"
+          gap="3"
+          style={{ width: "100%", alignItems: "center" }}
+        >
+          {documents.map((doc) => (
+            <ChatCard key={doc.id} doc={doc} />
+          ))}
         </Flex>
       </Flex>
     </Flex>

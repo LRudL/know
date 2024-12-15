@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google"
+import { Inter } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthContext";
 import "@radix-ui/themes/styles.css";
-import { Theme } from "@radix-ui/themes"
+import { Theme } from "@radix-ui/themes";
 import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-inter"
-})
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -25,7 +25,28 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body>
         <AuthProvider>
-          <Theme accentColor="blue" grayColor="gray" hasBackground={true}>
+          <Theme
+            appearance="light"
+            accentColor="custom"
+            grayColor="gray"
+            radius="medium"
+            scaling="100%"
+            style={{
+              "--accent-1": "#fafafa",
+              "--accent-2": "#f5f5f5",
+              "--accent-3": "#e5e5e5",
+              "--accent-4": "#d4d4d4",
+              "--accent-5": "#737373",
+              "--accent-6": "#525252",
+              "--accent-7": "#404040",
+              "--accent-8": "#262626",
+              "--accent-9": "#000000", // Main accent color - pure black
+              "--accent-10": "#444444", // Hover state
+              "--accent-11": "#000000", // High contrast
+              "--accent-12": "#000000", // Highest contrast
+              "--accent-contrast": "#ffffff", // Text color on accent backgrounds
+            }}
+          >
             {children}
           </Theme>
         </AuthProvider>

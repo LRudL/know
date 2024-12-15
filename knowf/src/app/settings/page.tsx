@@ -213,9 +213,9 @@ export default function SettingsPage() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen p-4">
+    <div className="w-full p-4">
       {/* Save Status Bar */}
-      <div className="fixed top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50">
+      <div className="sticky top-0 left-0 right-0 bg-white border-b p-4 flex justify-between items-center z-50">
         <button
           onClick={() => router.push("/dashboard")}
           className="text-blue-500 hover:text-blue-700"
