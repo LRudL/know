@@ -21,6 +21,7 @@ import { Header } from "@/components/Header";
 import { Flex } from "@radix-ui/themes";
 import { StreamParser } from "@/lib/streamParser";
 import { Separator } from "@radix-ui/themes";
+import { VoiceButton } from "@/components/VoiceButton";
 
 export default function ChatSessionWrapper({
   params,
@@ -283,52 +284,6 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
     }
   };
 
-  // Add this new component for the circular record button
-  function CircularRecordButton({
-    onTranscript,
-    sessionId,
-  }: {
-    onTranscript: (text: string) => void;
-    sessionId: string;
-  }) {
-    const [isRecording, setIsRecording] = useState(false);
-
-    const handleTranscript = (text: string) => {
-      setIsRecording(false);
-      onTranscript(text);
-      sendMessage(text);
-    };
-
-    const baseStyle = {
-      borderRadius: "50%",
-      width: "100%",
-      height: "100%",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      cursor: "pointer",
-      background: "none",
-    };
-
-    return (
-      <div className="flex items-center justify-center w-full h-full">
-        <SpeechInput
-          onTranscript={handleTranscript}
-          sessionId={sessionId}
-          className={`w-[300px] h-[300px] rounded-full transition-colors flex items-center justify-center text-white text-4xl font-bold cursor-pointer ${
-            isRecording
-              ? "bg-red-500 hover:bg-red-600"
-              : "bg-[var(--accent-9)] hover:bg-[var(--accent-10)]"
-          }`}
-          buttonStyle={baseStyle}
-          buttonText={isRecording ? "Click to Send" : "Click to Speak"}
-          isRecording={isRecording}
-          onRecordingStateChange={setIsRecording}
-        />
-      </div>
-    );
-  }
-
   return (
     <Flex
       className="dashboard-background"
@@ -411,9 +366,11 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
         {/* Right side - Record button (no scroll) */}
         <div className="w-1/2 flex items-center justify-center border-l">
           {isSpeechEnabled && (
-            <CircularRecordButton
+            <VoiceButton
               onTranscript={(text) => setInputText(text)}
               sessionId={sessionId}
+              size="large"
+              onSend={sendMessage}
             />
           )}
         </div>
