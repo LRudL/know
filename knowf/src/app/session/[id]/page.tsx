@@ -17,10 +17,6 @@ import {
   ChatMessageManager,
   ChatMessageProps,
 } from "@/components/ChatMessage";
-import {
-  RenderLevelProvider,
-  RenderLevelSelector,
-} from "@/components/ChatMessageRenderLevel";
 import { Header } from "@/components/Header";
 import { Flex } from "@radix-ui/themes";
 import { StreamParser } from "@/lib/streamParser";
@@ -33,9 +29,7 @@ export default function ChatSessionWrapper({
 }) {
   return (
     <QueryProvider>
-      <RenderLevelProvider>
-        <ChatSession params={params} />
-      </RenderLevelProvider>
+      <ChatSession params={params} />
     </QueryProvider>
   );
 }
@@ -353,9 +347,6 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
           >
             {isSpeechEnabled ? "🎤 Disable Voice" : "🎤 Enable Voice"}
           </button>
-          <div className="ml-auto">
-            <RenderLevelSelector />
-          </div>
         </div>
       </div>
       <Separator orientation="horizontal" size="4" />
