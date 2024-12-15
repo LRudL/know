@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { debug } from "@/lib/debug";
 import { EventSourcePolyfill } from "event-source-polyfill";
+import { StreamParser, StreamChunk } from "./streamParser";
 
 export interface ChatSession {
   id: string;
@@ -136,17 +137,23 @@ export class SessionService {
     }
   }
 
-  static async sendMessage(
+  static async streamMessage(
     sessionId: string,
-    message: string
-  ): Promise<EventSourcePolyfill> {
+    message: string,
+    callbacks: {
+      onChunk: (chunks: StreamChunk[]) => void;
+      onError: (error: Error) => void;
+      onEnd: () => void;
+    }
+  ): Promise<() => void> {
+    // returns cleanup function
     const {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("No auth session");
 
     debug.log("Creating EventSource connection");
-    return new EventSourcePolyfill(
+    const eventSource = new EventSourcePolyfill(
       `/api/chat/stream?message=${encodeURIComponent(
         message
       )}&session_id=${sessionId}`,
@@ -154,5 +161,38 @@ export class SessionService {
         headers: { Authorization: `Bearer ${session.access_token}` },
       }
     );
+
+    const streamParser = new StreamParser();
+
+    eventSource.onmessage = (event) => {
+      if (event.data === "[END]") {
+        eventSource.close();
+        callbacks.onEnd();
+        return;
+      }
+
+      if (event.data.startsWith("Error:")) {
+        debug.error("Received error from stream:", event.data);
+        eventSource.close();
+        callbacks.onError(new Error(event.data));
+        return;
+      }
+
+      const chunks = streamParser.parseChunk(event.data);
+      callbacks.onChunk(chunks);
+    };
+
+    eventSource.onerror = (error) => {
+      debug.error("EventSource error:", error);
+      eventSource.close();
+      callbacks.onError(new Error("Stream connection failed"));
+    };
+
+    // Also add onopen for debugging
+    eventSource.onopen = () => {
+      debug.log("EventSource connection opened");
+    };
+
+    return () => eventSource.close();
   }
 }

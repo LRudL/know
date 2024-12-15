@@ -43,7 +43,7 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
   // END UNDELETABLE COMMENTS
 
   const sessionId = unwrappedParams.id;
-  const { data: session, isLoading } = useSession(sessionId);
+  const { data: session, isLoading, error } = useSession(sessionId);
   const [messages, setMessages] = useState<ChatMessageProps[]>([]);
   const [inputText, setInputText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -249,8 +249,22 @@ function ChatSession({ params }: { params: Promise<{ id: string }> }) {
     };
   }, [sessionId]);
 
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
+
   if (isLoading) {
     return <div>Loading session...</div>;
+  }
+
+  if (error) {
+    return <div>Error loading session</div>;
   }
 
   if (!session) {
