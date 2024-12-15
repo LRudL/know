@@ -120,6 +120,11 @@ def format_node_for_session_prompt(node: ContentMapNode) -> str:
 
 
 async def get_session_system_prompt(chat_session_id: str, client: Client):
+    """
+    Get the system prompt for a chat session by using PyPDF to convert the document pdf
+    to text, and then formatting the nodes and edges into a prompt, and then formatting
+    the learning state and figuring out which nodes should be shown.
+    """
 
     # Get document_id from chat_sessions table
     document_id = session_id_to_document_id(chat_session_id, client)
