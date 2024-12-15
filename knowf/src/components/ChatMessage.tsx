@@ -28,6 +28,7 @@ export interface ChatMessageProps {
   role: "user" | "assistant";
   content: string | MessageContent | (string | MessageContent)[];
   isLatest?: boolean;
+  showDebugInfo?: boolean;
 }
 
 const renderToolResult = (result: { content: string; tool_use_id: string }) => {
@@ -51,7 +52,11 @@ const renderToolResult = (result: { content: string; tool_use_id: string }) => {
   }
 };
 
-const renderThinkingText = (text: string) => {
+const renderThinkingText = (text: string, showDebugInfo: boolean) => {
+  if (!showDebugInfo) {
+    return text.replace(/<thinking>.*?<\/thinking>/gs, "");
+  }
+
   const parts = text.split(/(<thinking>|<\/thinking>)/);
   let isThinking = false;
 
@@ -89,39 +94,52 @@ const renderThinkingText = (text: string) => {
 };
 
 const contentRenderers = {
-  text: (content: { text: string }) => renderThinkingText(content.text),
-  tool_result: renderToolResult,
-  tool_use: (content: { content: string }) => (
-    <div className="whitespace-pre-wrap">
-      <div className="text-xs text-gray-500">Tool Use:</div>
-      {content.content}
-    </div>
-  ),
-  raw: (text: string) => renderThinkingText(text),
+  text: (content: { text: string }, showDebugInfo: boolean) =>
+    renderThinkingText(content.text, showDebugInfo),
+  tool_result: (
+    content: { content: string; tool_use_id: string },
+    showDebugInfo: boolean
+  ) => (showDebugInfo ? renderToolResult(content) : null),
+  tool_use: (content: { content: string }, showDebugInfo: boolean) =>
+    showDebugInfo ? (
+      <div className="whitespace-pre-wrap">
+        <div className="text-xs text-gray-500">Tool Use:</div>
+        {content.content}
+      </div>
+    ) : null,
+  raw: (text: string, showDebugInfo: boolean) =>
+    renderThinkingText(text, showDebugInfo),
 };
 
-const renderContentItem = (item: string | MessageContent) => {
+const renderContentItem = (
+  item: string | MessageContent,
+  showDebugInfo: boolean
+) => {
   if (typeof item === "string") {
-    return contentRenderers.raw(item);
+    return contentRenderers.raw(item, showDebugInfo);
   }
 
   const renderer = contentRenderers[item.type as keyof typeof contentRenderers];
   if (!renderer) {
-    debug.warn(`No renderer for content type: ${item.type}`);
-    return (
-      <pre className="bg-gray-50 p-2 rounded text-sm overflow-x-auto">
-        {JSON.stringify(item, null, 2)}
-      </pre>
-    );
+    if (showDebugInfo) {
+      debug.warn(`No renderer for content type: ${item.type}`);
+      return (
+        <pre className="bg-gray-50 p-2 rounded text-sm overflow-x-auto">
+          {JSON.stringify(item, null, 2)}
+        </pre>
+      );
+    }
+    return null;
   }
 
-  return renderer(item as any);
+  return renderer(item as any, showDebugInfo);
 };
 
 export const ChatMessage = ({
   role,
   content,
   isLatest = false,
+  showDebugInfo = false,
 }: ChatMessageProps) => {
   const [displayContent, setDisplayContent] = useState(content);
 
@@ -129,30 +147,32 @@ export const ChatMessage = ({
     setDisplayContent(content);
   }, [content]);
 
-  /*debug.log("[ChatMessage] Rendering message:", {
-    role,
-    content: displayContent,
-    isLatest,
-  });*/
-
   if (Array.isArray(displayContent)) {
     return (
       <div className="space-y-2">
-        {displayContent.map((item, index) => (
-          <div
-            key={index}
-            className={`p-4 rounded-lg ${
-              role === "user"
-                ? "bg-blue-100 ml-auto max-w-[80%]"
-                : "bg-gray-100 mr-auto max-w-[80%]"
-            }`}
-          >
-            {renderContentItem(item)}
-          </div>
-        ))}
+        {displayContent.map((item, index) => {
+          const renderedContent = renderContentItem(item, showDebugInfo);
+          if (!renderedContent) return null;
+
+          return (
+            <div
+              key={index}
+              className={`p-4 rounded-lg ${
+                role === "user"
+                  ? "bg-blue-100 ml-auto max-w-[80%]"
+                  : "bg-gray-100 mr-auto max-w-[80%]"
+              }`}
+            >
+              {renderedContent}
+            </div>
+          );
+        })}
       </div>
     );
   }
+
+  const renderedContent = renderContentItem(displayContent, showDebugInfo);
+  if (!renderedContent) return null;
 
   return (
     <div
@@ -162,7 +182,7 @@ export const ChatMessage = ({
           : "bg-gray-100 mr-auto max-w-[80%]"
       }`}
     >
-      {renderContentItem(displayContent)}
+      {renderedContent}
     </div>
   );
 };
